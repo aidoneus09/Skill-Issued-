@@ -2424,7 +2424,7 @@ export default function App() {
         {renderNavbar()}
         {renderAuthModal()}
 
-        <div style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
+        <div style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 50px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
           <div className="si-folder-wrap si-sec-mint">
             <div className="si-folder-tab">
               <span className="si-folder-badge">★</span>
