@@ -514,6 +514,16 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
+const response = await generateWithFallback(ai, {
+  model: 'gemini-2.5-flash',
+  contents: fullContents,
+  config: {
+    systemInstruction: systemPrompt,
+  },
+});
+
+const replyText = response.text || 'Sorry, I could not generate a response.';
+    
 async function generateWithFallback(ai, params) {
   const modelsToTry = [params.model || 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
   let lastError;
@@ -535,8 +545,6 @@ async function generateWithFallback(ai, params) {
   }
   throw lastError;
 }
-
-    const replyText = response.text;
 
     // Persist chat history if user is logged in
     if (userId) {
