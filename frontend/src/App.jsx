@@ -7,7 +7,6 @@ const API_BASE =
     ? 'http://localhost:5000'
     : 'https://skill-issued.onrender.com');
 
-
 const DEFAULT_WELCOME_MSG = {
   role: 'model',
   text: 'Welcome! Based on your Digital Skill Card, skills, and experience, I can match you with open jobs and recommend free upskilling courses. Choose a topic below or type your own question!'
@@ -323,7 +322,7 @@ export default function App() {
     setAuthModalOpen(true);
   };
 
-const handleLogout = () => {
+  const handleLogout = () => {
     setCurrentUser(null);
     setSavedWorkers([]);
     setJobOffers([]);
@@ -1131,6 +1130,60 @@ const handleLogout = () => {
       }
       .si-purple-btn:hover { background: #574192; }
 
+      /* Clean Neutral Chat Bubbles (Shared by AI Coach & Offer Discussion) */
+      .si-chat-feed {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .si-chat-row {
+        display: flex;
+        width: 100%;
+      }
+      .si-chat-row.left { justify-content: flex-start; }
+      .si-chat-row.right { justify-content: flex-end; }
+      .si-chat-bubble {
+        max-width: 78%;
+        padding: 12px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.6;
+        word-break: break-word;
+      }
+      .si-chat-bubble.incoming {
+        background: #FFFFFF;
+        color: #29223B;
+        border: 1px solid #E3E7EC;
+        border-bottom-left-radius: 4px;
+      }
+      .si-chat-bubble.outgoing {
+        background: #F1F3F6;
+        color: #29223B;
+        border: 1px solid #E2E5EC;
+        border-bottom-right-radius: 4px;
+      }
+      .si-chat-sender {
+        font-size: 11px;
+        font-weight: 600;
+        color: #687281;
+        margin-bottom: 4px;
+      }
+      .si-neutral-reply-btn {
+        height: 42px;
+        padding: 0 22px;
+        background: #29223B;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        flex-shrink: 0;
+      }
+      .si-neutral-reply-btn:hover { background: #3E3556; }
+
       .si-footer { width: 100%; background: #FFFFFF; border-top: 1px solid #ECEEF3; padding: 20px 32px; margin-top: 48px; display: flex; justify-content: center; }
       .si-footer-inner { width: 100%; max-width: 1376px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
       .si-footer-links { display: flex; align-items: center; gap: 28px; font-size: 12px; color: #687281; }
@@ -1138,10 +1191,7 @@ const handleLogout = () => {
   );
 
   // =========================================================================
-  // LOGO COMPONENT (USES frontend/src/assets/logo.png)
-  // =========================================================================
-  // =========================================================================
-  // LOGO COMPONENT (USES frontend/src/assets/logo.png)
+  // LOGO COMPONENT (USES frontend/src/assets/LOGO2.png)
   // =========================================================================
   const renderLogo = (small = false) => (
     <div
@@ -1191,7 +1241,7 @@ const handleLogout = () => {
           <nav className="si-nav-tiles">
             {isVerifiedEmployer ? (
               <>
-              <button
+                <button
                   type="button"
                   onClick={() => setView('employer')}
                   className={`si-nav-tile ${view === 'employer' ? 'active' : ''}`}
@@ -2313,45 +2363,18 @@ const handleLogout = () => {
                   ))}
                 </div>
 
-                <div style={{ padding: '22px', height: '50vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '14px', lineHeight: '1.65', background: '#FAFBFD' }}>
-                 {messages.map((msg, idx) => {
-  // Check if the logged-in user sent this message
-  const isMe =
-    msg.senderEmail === currentUser?.email ||
-    msg.senderId === currentUser?.id ||
-    msg.senderRole === currentUser?.role;
-
-  return (
-    <div
-      key={msg.id || idx}
-      className={`flex w-full mb-3 ${isMe ? 'justify-end' : 'justify-start'}`}
-    >
-      <div
-        className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed border ${
-          isMe
-            ? 'bg-zinc-900 text-white border-zinc-900 rounded-br-sm'
-            : 'bg-white text-zinc-800 border-zinc-200 rounded-bl-sm'
-        }`}
-      >
-        {!isMe && msg.senderName && (
-          <p className="text-[11px] font-medium text-zinc-400 mb-1">
-            {msg.senderName}
-          </p>
-        )}
-        <p className="whitespace-pre-wrap break-words">{msg.text || msg.content}</p>
-        {msg.timestamp && (
-          <span
-            className={`block text-[10px] mt-1 ${
-              isMe ? 'text-zinc-400 text-right' : 'text-zinc-400 text-left'
-            }`}
-          >
-            {msg.timestamp}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-})}
+                {/* Restored AI Career Coach message feed (AI on left, user on right, formatted links) */}
+                <div className="si-chat-feed" style={{ padding: '22px', height: '50vh', overflowY: 'auto', background: '#FAFBFD' }}>
+                  {messages.map((m, idx) => {
+                    const isUser = m.role === 'user';
+                    return (
+                      <div key={idx} className={`si-chat-row ${isUser ? 'right' : 'left'}`}>
+                        <div className={`si-chat-bubble ${isUser ? 'outgoing' : 'incoming'}`}>
+                          {isUser ? m.text : renderMessageWithLinks(m.text)}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {loading && (
                     <div style={{ fontSize: '13px', color: '#687281', fontStyle: 'italic' }}>
                       Analyzing your Digital Skill Card...
@@ -2572,6 +2595,7 @@ const handleLogout = () => {
                   </div>
                 </div>
 
+                {/* Neutral, Monochrome Offer Discussion & Messages (Other person on left, yours on right) */}
                 <div style={{ marginTop: '18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
@@ -2583,9 +2607,10 @@ const handleLogout = () => {
                         <span
                           style={{
                             fontSize: '11px',
-                            fontWeight: 700,
-                            background: '#FCE6FA',
-                            color: '#6951C8',
+                            fontWeight: 600,
+                            background: '#F1F3F6',
+                            color: '#29223B',
+                            border: '1px solid #E2E5EC',
                             padding: '3px 10px',
                             borderRadius: '6px'
                           }}
@@ -2595,24 +2620,31 @@ const handleLogout = () => {
                       )}
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                    {(offer.messages || []).map((m, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: '10px',
-                          background: m.senderRole === 'employer' ? '#FCE6FA' : '#DDFBF9',
-                          fontSize: '13px',
-                          color: '#29223B'
-                        }}
-                      >
-                        <strong style={{ color: '#443579' }}>
-                          {m.senderName} ({m.senderRole === 'employer' ? 'Employer' : 'Applicant'}):{' '}
-                        </strong>
-                        <span>{m.text}</span>
-                      </div>
-                    ))}
+                  <div
+                    className="si-chat-feed"
+                    style={{
+                      background: '#FAFBFD',
+                      border: '1px solid #ECEEF3',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      marginBottom: '12px'
+                    }}
+                  >
+                    {(offer.messages || []).map((m, idx) => {
+                      const isMe = m.senderRole === currentUser?.role;
+                      return (
+                        <div key={idx} className={`si-chat-row ${isMe ? 'right' : 'left'}`}>
+                          <div className={`si-chat-bubble ${isMe ? 'outgoing' : 'incoming'}`}>
+                            {!isMe && (
+                              <div className="si-chat-sender">
+                                {m.senderName} ({m.senderRole === 'employer' ? 'Employer' : 'Applicant'})
+                              </div>
+                            )}
+                            <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px' }}>
@@ -2634,14 +2666,13 @@ const handleLogout = () => {
                     <button
                       type="button"
                       onClick={() => handleOfferReplyOrStatus(offer.id)}
-                      className="si-purple-btn"
-                      style={{ height: '42px', padding: '0 22px' }}
+                      className="si-neutral-reply-btn"
                     >
                       {currentUser?.role === 'employer' ? 'Send Reply' : 'Reply'}
                     </button>
                   </div>
                 </div>
-                </div>
+              </div>
             ))
           )}
         </div>
@@ -2940,18 +2971,16 @@ const handleLogout = () => {
                   </div>
                 </div>
 
-<button
-               type="button"
-               onClick={() => setView(isVerifiedEmployer ? 'employer' : 'card')}
-               className="si-pink-cta-btn"
-               style={{ width: '100%', marginTop: '22px' }}
-             >
-               {isVerifiedEmployer
-                 ? 'Back to Search for Workers →'
-                 : 'Ask AI Coach About My Career Path →'}
-             </button>
-
-                
+                <button
+                  type="button"
+                  onClick={() => setView(isVerifiedEmployer ? 'employer' : 'card')}
+                  className="si-pink-cta-btn"
+                  style={{ width: '100%', marginTop: '22px' }}
+                >
+                  {isVerifiedEmployer
+                    ? 'Back to Search for Workers →'
+                    : 'Ask AI Coach About My Career Path →'}
+                </button>
               </div>
             </section>
           </div>
@@ -3432,9 +3461,9 @@ const handleLogout = () => {
                   </button>
                 )}
               </div>
-             </div>
             </div>
           </div>
+        </div>
       )}
 
       {renderFooter()}
