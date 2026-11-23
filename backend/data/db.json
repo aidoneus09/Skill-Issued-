@@ -1,0 +1,136 @@
+{
+  "users": [
+    {
+      "id": "emp-jollibee-001",
+      "role": "employer",
+      "email": "hr.manager@jollibee.com.ph",
+      "password": "e55dc06c2ef74887137a2a0e0ab589d26d7d396bf4b3a0befa6dd9bcc7b6c8ce",
+      "recruiterName": "Maria Clara Reyes (Talent Acquisition Lead)",
+      "companyName": "Jollibee Foods Corporation (JFC)",
+      "verified": true,
+      "createdAt": "2026-01-15T08:00:00.000Z"
+    },
+    {
+      "id": "usr-1795249405425",
+      "role": "worker",
+      "fullName": "Aiden Umali",
+      "email": "maidenlou08@hotmail.com",
+      "password": "0be64ae89ddd24e225434de95d501711339baeee18f009ba9b4369af27d30d60",
+      "dob": "2009-09-08",
+      "age": 17,
+      "createdAt": "2026-11-21T08:23:25.425Z"
+    }
+  ],
+  "employerRequests": [],
+  "workers": [
+    {
+      "id": "w-usr-1795249405425",
+      "isNew": true,
+      "userId": "usr-1795249405425",
+      "fullName": "Aiden Umali",
+      "email": "maidenlou08@hotmail.com",
+      "mobile": "912 345 6789",
+      "dob": "2009-09-08",
+      "gender": "Female",
+      "education": "High School Diploma",
+      "city": "Quezon City",
+      "targetPay": "₱610",
+      "tracks": [
+        "General Shift Help"
+      ],
+      "customSkills": "Figma, adobe photoshop, website designer, graphic artist",
+      "workExperience": "1 year graphic artist in Amazon",
+      "gear": [
+        "Phone",
+        "Work shoes",
+        "Work Clothes"
+      ],
+      "badges": [
+        "Barangay Clearance",
+        "NBI Clearance",
+        "SSS / PhilHealth / Pag-IBIG",
+        "Health Certificate"
+      ],
+      "age": 17
+    },
+    {
+      "id": "w-usr-1795199042938",
+      "userId": "usr-1795199042938",
+      "fullName": "Aiden Umali",
+      "email": "maidenlou908@gmail.com",
+      "mobile": "",
+      "dob": "2009-09-08",
+      "age": 17,
+      "city": "Quezon City",
+      "targetPay": "₱610",
+      "tracks": [
+        "General Shift Help"
+      ],
+      "customSkills": "Ready for immediate shift",
+      "workExperience": "Entry-level / First-time jobseeker",
+      "gear": [],
+      "badges": []
+    }
+  ],
+  "offers": [
+    {
+      "id": "off-1795259025791",
+      "employerId": "emp-jollibee-001",
+      "workerId": "w-usr-1795249405425",
+      "workerName": "Aiden Umali",
+      "workerEmail": "maidenlou08@hotmail.com",
+      "recruiterName": "Maria Clara Reyes (Talent Acquisition Lead)",
+      "companyName": "Jollibee Foods Corporation (JFC)",
+      "jobTitle": "Store Service Crew",
+      "salary": "₱645 / day + Overtime Pay",
+      "workingHours": "8:00 AM – 5:00 PM (Mon–Sat, 1 hr break)",
+      "benefits": "Free crew meal per shift, HMO coverage, uniform provided, SSS/PhilHealth/Pag-IBIG",
+      "status": "Pending Worker Response",
+      "createdAt": "2026-11-21T11:03:45.791Z",
+      "messages": [
+        {
+          "senderRole": "employer",
+          "senderName": "Maria Clara Reyes (Talent Acquisition Lead)",
+          "text": "Hello! We reviewed your Digital Skill Card and document badges and would love to invite you to join our store team.",
+          "time": "Just now"
+        }
+      ]
+    }
+  ],
+  "chatHistories": {
+    "usr-1795249405425": [
+      {
+        "role": "user",
+        "text": "Compare my current skills and experience against the skills data base. What skills do I already have, and which free courses should I take next for my target role?"
+      },
+      {
+        "role": "model",
+        "text": "Here is a comparative breakdown of your current skills and experience against our skills database, along with recommended courses to take your career to the next level.\n\n---\n\n### **1. Skills You Already Have**\n\nBased on your 1-year experience as a Graphic Artist with Amazon and your design background, you already possess high-demand competencies that match the following database standards:\n\n* **Figma & UI/UX Prototyping:** Directly aligns with digital product design and interface creation roles.\n* **Adobe Photoshop & Visual Asset Creation:** Directly matches our benchmark for **Adobe Graphic Designer** and visual design.\n* **Website Design:** Establishes a strong foundation in user interfaces and web layouts.\n* **Corporate Production Experience:** Your background with Amazon demonstrates proven ability to handle creative briefs, turnaround times, and brand standards.\n\n---\n\n### **2. Recommended Courses to Take Next**\n\nDepending on your direction—whether advancing into higher-paying digital design tracks or broadening into general shift and workplace operations—here are the top matched courses:\n\n#### **Track A: Deepening Your UI/UX & Graphic Design Expertise**\n* **[UI/UX Designer Professional Certificate](https://www.coursera.org/professional-certificates/ibm-ui-ux-designer)**  \n  * **Skill Area:** UI Design  \n  * **Why take it:** Validates your website design background with formal credentials in user experience workflows and design systems.\n* **[Figma UI/UX Masterclass](https://www.udemy.com/courses/search/?src=ukw&q=Figma%20UI%2FUX%20Masterclass)**  \n  * **Skill Area:** Figma  \n  * **Why take it:** Sharpens your existing Figma capabilities into advanced prototyping, auto-layouts, and component libraries.\n* **[Design that Demands Attention Professional Certificate](https://www.coursera.org/professional-certificates/adobe-graphic-designer)**  \n  * **Skill Area:** Adobe Graphic Designer  \n  * **Why take it:** Builds official certification on top of your Adobe Photoshop experience to showcase on your resume.\n* **[Graphic Design Specialization](https://www.coursera.org/specializations/graphic-design)**  \n  * **Skill Area:** Graphic and Visual Design  \n  * **Why take it:** Covers core design theory, typography, and composition to strengthen your overall creative portfolio.\n\n---\n\n#### **Track B: Essential Workplace & Service Skills (For General Shift Roles)**\n* **[English for Effective Business Communication](https://www.coursera.org/learn/english-for-working-together-in-business)**  \n  * **Skill Area:** Communication  \n  * **Why take it:** Enhances verbal and written interaction with team members, supervisors, and customers across shift environments.\n* **[Customer Experience Management](https://www.coursera.org/learn/customer-experience-management)**  \n  * **Skill Area:** Customer Relationship Management  \n  * **Why take it:** Prepares you for customer-facing store and service roles if you take on shifts in retail, dining, or operations.\n\n---\n\n### **Coach's Tip:**\nHaving 1 year of design experience at Amazon at age 17 is a huge competitive edge. While General Shift Help is great for immediate income, completing the **[UI/UX Designer Professional Certificate](https://www.coursera.org/professional-certificates/ibm-ui-ux-designer)** will quickly position you for remote, hybrid, and higher-earning creative roles well above your minimum target pay."
+      },
+      {
+        "role": "user",
+        "text": "I want to work in an art job"
+      },
+      {
+        "role": "model",
+        "text": "Hello Aiden! It is great to see your passion for creative work. With your 1-year background as a graphic artist at Amazon and your experience in Figma, Adobe Photoshop, and website design, you already have a fantastic creative foundation.\n\n### Current Job Database Reality\nIn our current active jobs database, there are **no direct digital art or graphic design studio roles** listed at this moment (the current openings primarily focus on service, logistics, and retail shift help). \n\nHowever, if you want roles where your keen eye for design, color harmony, visual presentation, and brand awareness are highly valued, here are the most relevant positions from our database:\n\n1. **[Merchandiser](https://careers.unilever.com/en/philippines)**  \n   * **Company:** Unilever Philippines  \n   * **Adjacent Job:** Product Promoter  \n   * **Why it fits:** Visual merchandising relies heavily on visual balance, spatial arrangement, and product presentation—skills that naturally align with graphic design sensibilities.\n\n2. **[Sales Associate](https://www.fastretailing.com/employment/en/)**  \n   * **Company:** UNIQLO Philippines  \n   * **Adjacent Job:** Retail Assistant  \n   * **Why it fits:** Uniqlo places strong emphasis on strict visual standards, aesthetic store layouts, and display presentation.\n\n3. **[Promodiser](https://www.suyen.com.ph)**  \n   * **Company:** Bench  \n   * **Adjacent Job:** Retail Sales Associate  \n   * **Why it fits:** Bench is a fashion and lifestyle brand where creative presentation, styling, and visual brand representation play a central role.\n\n---\n\n### Upskilling: Elevating Your Art & Design Career\nTo help you qualify for advanced design and digital art positions as new openings appear, you can strengthen your portfolio and technical credentials with these recommended courses:\n\n* **Graphic Design & Visual Identity:**  \n  * [Design that Demands Attention Professional Certificate](https://www.coursera.org/professional-certificates/adobe-graphic-designer) – Master professional Adobe workflows to build high-impact creative assets.  \n  * [Graphic Design Specialization](https://www.coursera.org/specializations/graphic-design) – Deepen your mastery of composition, typography, and visual communication.\n\n* **UI/UX & Web Design:**  \n  * [Figma UI/UX Masterclass](https://www.udemy.com/courses/search/?src=ukw&q=Figma%20UI%2FUX%20Masterclass) – Level up your Figma workflow to build scalable, interactive web and mobile prototypes.  \n  * [UI/UX Designer Professional Certificate](https://www.coursera.org/professional-certificates/ibm-ui-ux-designer) – Enhance your design portfolio with industry-standard UX/UI methodologies.\n\n* **Art Foundations:**  \n  * [Introduction to Drawing: Space and Composition](https://www.coursera.org/learn/introduction-to-drawing-space-and-composition) – Strengthen your core artistic foundations in composition and proportion.\n\nKeep building your portfolio and polishing your digital designs—your creative skillset has tremendous long-term growth potential!"
+      },
+      {
+        "role": "user",
+        "text": "Based on my job tracks, skills, work experience, and gear, which jobs and adjacent roles in the jobs database fit me best? Include the Company and URL."
+      },
+      {
+        "role": "model",
+        "text": "Hello Aiden! Based on your target track in **General Shift Help**, your completed documentation (including your Health Certificate and Clearances), and your readiness with **Work Clothes, Work Shoes, and a Smartphone**, here are the best matching jobs and adjacent roles from our database.\n\n---\n\n### 1. Store Operations & Retail Shift Help\nYour design background gives you an exceptional eye for detail, store presentation, and product organization, while your work shoes and clothes make you immediately shift-ready.\n\n* **[Cashier](https://www.ikea.com/ph/en/this-is-ikea/work-with-us/ )**  \n  * **Adjacent Job:** Customer Service Assistant  \n  * **Company:** IKEA Philippines  \n  * **Fit:** Great for organized shift support in a design-forward retail environment.\n\n* **[Store Attendant](https://minisoph.com/careers )**  \n  * **Adjacent Job:** Inventory Assistant  \n  * **Company:** Miniso Philippines  \n  * **Fit:** Involves product display, visual merchandising, and inventory tracking where attention to detail is essential.\n\n* **[Retail Sales Associate](https://www.mrdiy.com/ph/career )**  \n  * **Adjacent Job:** Store Associate  \n  * **Company:** MR. DIY Philippines  \n  * **Fit:** Active floor shifts requiring customer assistance, stock replenishment, and organized merchandise presentation.\n\n* **[Cashier](https://www.7-eleven.com.ph/careers/)** / **[Store Operations Assistant](https://www.7-eleven.com.ph/careers/)**  \n  * **Adjacent Job:** Store Assistant / Operations Management Trainee  \n  * **Company:** 7-Eleven  \n  * **Fit:** Standard shift schedules with flexible branch assignments across Quezon City.\n\n---\n\n### 2. Dining & Café Shift Service\nHaving your **Health Certificate** already secured is a major advantage for immediate onboarding in food and beverage service.\n\n* **[Barista](https://pickup-coffee.com/careers)** / **[Café Assistant](https://pickup-coffee.com/careers)**  \n  * **Adjacent Job:** Café Assistant / Beverage Crew  \n  * **Company:** Pickup Coffee  \n  * **Fit:** Fast-paced beverage preparation and counter service suitable for young, dynamic shift workers.\n\n* **[Service Crew](https://www.burgerking.com.ph/careers )**  \n  * **Adjacent Job:** Restaurant Crew  \n  * **Company:** Burger King Philippines  \n  * **Fit:** Structured dining and counter shifts utilizing your complete health clearances and ready work gear.\n\n* **[Server](https://careers.jollibeegroup.com)**  \n  * **Adjacent Job:** Service Crew  \n  * **Company:** Jollibee  \n  * **Fit:** Standard quick-service restaurant shifts with clear pathways for training and operational support.\n\n---\n\n### 3. Logistics & Warehouse Support\nIf you prefer hands-on, back-of-house shift work:\n\n* **[Warehouse Assistant](https://www.entrego.com.ph/careers )**  \n  * **Adjacent Job:** Inventory Assistant  \n  * **Company:** Entrego Philippines  \n  * **Fit:** Focused on inventory sorting, cataloging, and parcel handling using your work shoes and smartphone.\n\n* **[Warehouse Sorter](https://www.ninjavan.co/en-ph/company/careers)**  \n  * **Adjacent Job:** Warehouse Assistant  \n  * **Company:** Ninja Van Philippines  \n  * **Fit:** Fast shift-based scanning and parcel sorting where accuracy and speed are key.\n\n---\n\n### Pro-Tip for Aiden:\nBecause you have a solid 1-year corporate background as a graphic artist at Amazon, mention your **computer literacy, punctuality, and experience working in fast-paced team environments** during your interviews. This will immediately set you apart from typical entry-level applicants!"
+      },
+      {
+        "role": "user",
+        "text": "Based on my job tracks, skills, work experience, and gear, which jobs and adjacent roles in the jobs database fit me best? Include the Company and URL."
+      },
+      {
+        "role": "model",
+        "text": "Hello Aiden! Based on your target track of **General Shift Help**, your location in **Quezon City**, your work gear (**Phone, Work Shoes, and Work Clothes**), and your completed document badges (**Barangay Clearance, NBI Clearance, SSS/PhilHealth/Pag-IBIG, and Health Certificate**), here are the best matching jobs and adjacent roles from our database:\n\n---\n\n### 1. Retail & Store Shift Operations\nYour 1-year corporate experience at Amazon and strong eye for detail make you an exceptional fit for retail floor shifts, POS operations, and visual inventory management. Your work shoes and work clothes ensure you are shift-ready immediately.\n\n* **[Cashier](https://www.ikea.com/ph/en/this-is-ikea/work-with-us/ )**  \n  * **Adjacent Role:** Customer Service Assistant  \n  * **Company:** IKEA Philippines  \n  * **Why it fits:** IKEA values structured, tech-comfortable associates for customer checkouts and floor service in an aesthetically focused environment.\n\n* **[Store Attendant](https://minisoph.com/careers )**  \n  * **Adjacent Role:** Inventory Assistant  \n  * **Company:** Miniso Philippines  \n  * **Why it fits:** Great for active shift workers handling stock arrangement, visual displays, and customer assistance.\n\n* **[Sales Associate](https://www.fastretailing.com/employment/en/)**  \n  * **Adjacent Role:** Retail Assistant  \n  * **Company:** UNIQLO Philippines  \n  * **Why it fits:** Fast Retailing values precision, visual merchandising standards, and energetic customer service during store shifts.\n\n* **[Cashier](https://www.7-eleven.com.ph/careers/)**  \n  * **Adjacent Role:** Store Assistant  \n  * **Company:** 7-Eleven  \n  * **Why it fits:** Flexible shifts available across Quezon City branches, matching your immediate readiness with government badges and shift gear.\n\n* **[Retail Sales Associate](https://www.mrdiy.com/ph/career )**  \n  * **Adjacent Role:** Store Associate  \n  * **Company:** MR. DIY Philippines  \n  * **Why it fits:** Involves shelf stocking, customer service, and store maintenance where your reliability and readiness with work shoes are essential.\n\n---\n\n### 2. Dining, Café & Food Service Shifts\nBecause you already hold an active **Health Certificate**, you can be onboarded quickly into food handling, counter assistance, and café service.\n\n* **[Barista](https://pickup-coffee.com/careers)**  \n  * **Adjacent Role:** Café Assistant  \n  * **Company:** Pickup Coffee  \n  * **Why it fits:** High-energy, modern café shifts ideal for young professionals; utilizes your customer service skills and valid health clearance.\n\n* **[Service Crew](https://www.burgerking.com.ph/careers )**  \n  * **Adjacent Role:** Restaurant Crew  \n  * **Company:** Burger King Philippines  \n  * **Why it fits:** Structured shift work with established dining service, order processing, and dining area upkeep.\n\n* **[Server](https://careers.jollibeegroup.com)**  \n  * **Adjacent Role:** Service Crew  \n  * **Company:** Jollibee  \n  * **Why it fits:** Reliable shift schedules, standardized training, and widespread branch locations across Quezon City.\n\n---\n\n### 3. Warehouse & Inventory Shift Support\nYour tech literacy and smartphone readiness make tracking, scanning, and inventory sorting easy to learn.\n\n* **[Warehouse Assistant](https://www.entrego.com.ph/careers )**  \n  * **Adjacent Role:** Inventory Assistant  \n  * **Company:** Entrego Philippines  \n  * **Why it fits:** Well-suited for shift-based inventory logging, parcel arrangement, and order tracking using your work shoes and smartphone.\n\n* **[Warehouse Sorter](https://www.ninjavan.co/en-ph/company/careers)**  \n  * **Adjacent Role:** Warehouse Assistant  \n  * **Company:** Ninja Van Philippines  \n  * **Why it fits:** Fast-paced parcel processing and sorting shifts that reward speed, accuracy, and attention to detail.\n\n* **[Warehouse Packer](https://careers.shopee.ph)**  \n  * **Adjacent Role:** Warehouse Staff  \n  * **Company:** Shopee Xpress  \n  * **Why it fits:** Hands-on fulfillment shifts involving item packaging and verification in logistics hubs.\n\n---\n\n### Hiring Coach Advice for Aiden:\nWhen applying, highlight that you have **all required government clearances and health documentation ready for immediate submission**. Furthermore, emphasize your 1 year of experience at Amazon—it proves your punctuality, computer literacy, and ability to meet fast-paced operational targets!"
+      }
+    ]
+  }
+}
