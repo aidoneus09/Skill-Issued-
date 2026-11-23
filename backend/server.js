@@ -21,7 +21,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Retry and fallback helper for temporary 503 / 429 demand spikes
 async function generateWithFallback(aiClient, params) {
-  const modelsToTry = [params.model || 'gemini-3.8-flash', 'gemini-3.8-flash-lite'];
+  const modelsToTry = [params.model || 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
   let lastError;
 
   for (const modelName of modelsToTry) {
@@ -540,7 +540,7 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
     ];
 
     const response = await generateWithFallback(ai, {
-      model: 'gemini-3.8-flash',
+      model: 'gemini-3.5-flash',
       contents,
       config: {
         systemInstruction
