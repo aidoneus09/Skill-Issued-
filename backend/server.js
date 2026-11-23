@@ -8,8 +8,6 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
 
-
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,6 +18,33 @@ app.use(cors());
 app.use(express.json());
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// Retry and fallback helper for temporary 503 / 429 demand spikes
+async function generateWithFallback(aiClient, params) {
+  const modelsToTry = [params.model || 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  let lastError;
+
+  for (const modelName of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await aiClient.models.generateContent({
+          ...params,
+          model: modelName
+        });
+      } catch (err) {
+        lastError = err;
+        const isTransient =
+          err?.status === 503 ||
+          err?.status === 429 ||
+          String(err?.message).includes('503') ||
+          String(err?.message).includes('UNAVAILABLE');
+        if (!isTransient) throw err;
+        await new Promise((r) => setTimeout(r, attempt * 1500));
+      }
+    }
+  }
+  throw lastError;
+}
 
 // Persistent JSON database path
 const DB_DIR = path.join(__dirname, 'data');
@@ -514,37 +539,15 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
-const response = await generateWithFallback(ai, {
-  model: 'gemini-2.5-flash',
-  contents: fullContents,
-  config: {
-    systemInstruction: systemPrompt,
-  },
-});
-
-const replyText = response.text || 'Sorry, I could not generate a response.';
-    
-async function generateWithFallback(ai, params) {
-  const modelsToTry = [params.model || 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
-  let lastError;
-
-  for (const modelName of modelsToTry) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        return await ai.models.generateContent({
-          ...params,
-          model: modelName
-        });
-      } catch (err) {
-        lastError = err;
-        const isTransient = err?.status === 503 || err?.status === 429 || String(err?.message).includes('503');
-        if (!isTransient) throw err;
-        await new Promise((r) => setTimeout(r, attempt * 1500));
+    const response = await generateWithFallback(ai, {
+      model: 'gemini-2.5-flash',
+      contents,
+      config: {
+        systemInstruction
       }
-    }
-  }
-  throw lastError;
-}
+    });
+
+    const replyText = response.text || 'Sorry, I could not generate a response.';
 
     // Persist chat history if user is logged in
     if (userId) {
