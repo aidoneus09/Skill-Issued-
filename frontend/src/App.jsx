@@ -5,7 +5,7 @@ const API_BASE =
   import.meta.env.VITE_API_URL ||
   (window.location.hostname === 'localhost'
     ? 'http://localhost:5000'
-    : 'https://https://skill-issued.onrender.com');
+    : 'https://skill-issued.onrender.com');
 
 
 const DEFAULT_WELCOME_MSG = {
@@ -2314,22 +2314,44 @@ const handleLogout = () => {
                 </div>
 
                 <div style={{ padding: '22px', height: '50vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '14px', lineHeight: '1.65', background: '#FAFBFD' }}>
-                  {messages.map((m, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '14px 18px',
-                        borderRadius: '14px',
-                        maxWidth: '86%',
-                        alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                        background: m.role === 'user' ? '#6951C8' : '#FFFFFF',
-                        color: m.role === 'user' ? '#FFFFFF' : '#29223B',
-                        border: m.role === 'user' ? 'none' : '1px solid #E3E7EC'
-                      }}
-                    >
-                      {m.role === 'model' ? renderMessageWithLinks(m.text) : m.text}
-                    </div>
-                  ))}
+                 {messages.map((msg, idx) => {
+  // Check if the logged-in user sent this message
+  const isMe =
+    msg.senderEmail === currentUser?.email ||
+    msg.senderId === currentUser?.id ||
+    msg.senderRole === currentUser?.role;
+
+  return (
+    <div
+      key={msg.id || idx}
+      className={`flex w-full mb-3 ${isMe ? 'justify-end' : 'justify-start'}`}
+    >
+      <div
+        className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed border ${
+          isMe
+            ? 'bg-zinc-900 text-white border-zinc-900 rounded-br-sm'
+            : 'bg-white text-zinc-800 border-zinc-200 rounded-bl-sm'
+        }`}
+      >
+        {!isMe && msg.senderName && (
+          <p className="text-[11px] font-medium text-zinc-400 mb-1">
+            {msg.senderName}
+          </p>
+        )}
+        <p className="whitespace-pre-wrap break-words">{msg.text || msg.content}</p>
+        {msg.timestamp && (
+          <span
+            className={`block text-[10px] mt-1 ${
+              isMe ? 'text-zinc-400 text-right' : 'text-zinc-400 text-left'
+            }`}
+          >
+            {msg.timestamp}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+})}
                   {loading && (
                     <div style={{ fontSize: '13px', color: '#687281', fontStyle: 'italic' }}>
                       Analyzing your Digital Skill Card...
