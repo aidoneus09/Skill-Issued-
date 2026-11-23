@@ -540,7 +540,7 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
     ];
 
     const response = await generateWithFallback(ai, {
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents,
       config: {
         systemInstruction
