@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import 'dotenv/config';
 
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -512,13 +514,27 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: contents,
-      config: {
-        systemInstruction: systemInstruction
+async function generateWithFallback(ai, params) {
+  const modelsToTry = [params.model || 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  let lastError;
+
+  for (const modelName of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await ai.models.generateContent({
+          ...params,
+          model: modelName
+        });
+      } catch (err) {
+        lastError = err;
+        const isTransient = err?.status === 503 || err?.status === 429 || String(err?.message).includes('503');
+        if (!isTransient) throw err;
+        await new Promise((r) => setTimeout(r, attempt * 1500));
       }
-    });
+    }
+  }
+  throw lastError;
+}
 
     const replyText = response.text;
 
