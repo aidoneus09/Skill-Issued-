@@ -110,6 +110,31 @@ function computeAgeFromDob(dobStr) {
   return age;
 }
 
+// Local vault helpers so accounts, profiles, and chat histories survive Render free-tier sleep cycles
+function getAccountVault() {
+  try {
+    return JSON.parse(localStorage.getItem('si_account_vault') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveToAccountVault(email, record) {
+  if (!email) return;
+  try {
+    const vault = getAccountVault();
+    const key = email.trim().toLowerCase();
+    vault[key] = {
+      ...(vault[key] || {}),
+      ...record,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem('si_account_vault', JSON.stringify(vault));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 export default function App() {
   const [view, setView] = useState('setup'); // 'setup' | 'card' | 'offers' | 'resources' | 'employer'
   const [activeSection, setActiveSection] = useState(1);
@@ -170,6 +195,7 @@ export default function App() {
   const [empSearch, setEmpSearch] = useState('');
   const [empCity, setEmpCity] = useState('');
   const [empTrack, setEmpTrack] = useState('All');
+  const [empAgeBracket, setEmpAgeBracket] = useState('All');
   const [empRequiredBadges, setEmpRequiredBadges] = useState([]);
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [offerForm, setOfferForm] = useState({
@@ -211,7 +237,13 @@ export default function App() {
     }
   ];
 
-  // Initial load: courses and saved user session
+  // Smooth view switcher with scroll-to-top
+  const navigateToView = (nextView) => {
+    setView(nextView);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Initial load: courses and saved user session (with automatic backend sync)
   useEffect(() => {
     fetch(`${API_BASE}/api/skills`)
       .then((res) => res.json())
@@ -239,6 +271,33 @@ export default function App() {
               companyName: parsed.user.companyName || prev.companyName
             }));
           }
+
+          // Re-sync session to backend in case Render spun down and reset db.json
+          const vaultRecord = getAccountVault()[parsed.user.email?.toLowerCase()];
+          fetch(`${API_BASE}/api/auth/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user: parsed.user,
+              passwordHash: vaultRecord?.passwordHash,
+              workerProfile: parsed.workerProfile || vaultRecord?.workerProfile,
+              chatHistory: parsed.chatHistory || vaultRecord?.chatHistory || []
+            })
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((synced) => {
+              if (synced?.user) {
+                setCurrentUser(synced.user);
+                if (synced.workerProfile) {
+                  setProfile((prev) => ({ ...prev, ...synced.workerProfile }));
+                }
+                if (synced.chatHistory?.length > 0) {
+                  setMessages([DEFAULT_WELCOME_MSG, ...synced.chatHistory]);
+                }
+                localStorage.setItem('si_user_session', JSON.stringify(synced));
+              }
+            })
+            .catch(() => {});
         }
       } catch {
         localStorage.removeItem('si_user_session');
@@ -263,7 +322,7 @@ export default function App() {
       .catch((err) => console.error('Could not load job offers:', err));
   }, [currentUser]);
 
-  // Fetch worker profiles ONLY when signed in as a verified employer
+  // Fetch registered worker profiles ONLY when signed in as a verified employer
   useEffect(() => {
     if (currentUser?.role === 'employer' && currentUser?.verified) {
       fetch(`${API_BASE}/api/workers?employerId=${encodeURIComponent(currentUser.id)}`, {
@@ -271,7 +330,9 @@ export default function App() {
       })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
-          if (Array.isArray(data)) setSavedWorkers(data);
+          if (Array.isArray(data)) {
+            setSavedWorkers(data.filter((w) => Boolean(w.userId)));
+          }
         })
         .catch((err) => console.error('Could not load saved workers:', err));
     } else {
@@ -280,7 +341,7 @@ export default function App() {
   }, [currentUser]);
 
   const computedAge = computeAgeFromDob(profile.dob);
-  const isUnder15 = computedAge !== null && computedAge < 15;
+  const isUnder18 = computedAge !== null && computedAge < 18;
 
   const toggleItem = (field, value) => {
     setProfile((prev) => {
@@ -345,7 +406,7 @@ export default function App() {
     setSetupFeedback('');
     localStorage.removeItem('si_user_session');
     setMessages([DEFAULT_WELCOME_MSG]);
-    setView('setup');
+    navigateToView('setup');
   };
 
   const handleLoginSubmit = async (e) => {
@@ -354,19 +415,52 @@ export default function App() {
     setAuthSuccess('');
     setAuthLoading(true);
 
+    const normalizedEmail = authForm.email.trim().toLowerCase();
+    const vaultEntry = getAccountVault()[normalizedEmail];
+
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      let res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: authForm.email.trim(),
+          email: normalizedEmail,
           password: authForm.password
         })
       });
 
+      // If backend restarted and lost the account, restore from local vault if credentials match
+      if (res.status === 401 && vaultEntry && vaultEntry.passwordPlain === authForm.password) {
+        const syncRes = await fetch(`${API_BASE}/api/auth/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: vaultEntry.user,
+            workerProfile: vaultEntry.workerProfile,
+            chatHistory: vaultEntry.chatHistory || []
+          })
+        });
+        if (syncRes.ok) {
+          const syncedData = await syncRes.json();
+          setCurrentUser(syncedData.user);
+          if (syncedData.workerProfile) {
+            setProfile((prev) => ({ ...prev, ...syncedData.workerProfile }));
+          }
+          if (syncedData.chatHistory?.length > 0) {
+            setMessages([DEFAULT_WELCOME_MSG, ...syncedData.chatHistory]);
+          } else {
+            setMessages([DEFAULT_WELCOME_MSG]);
+          }
+          localStorage.setItem('si_user_session', JSON.stringify(syncedData));
+          setAuthModalOpen(false);
+          navigateToView(syncedData.user.role === 'employer' ? 'employer' : 'card');
+          setAuthLoading(false);
+          return;
+        }
+      }
+
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('Backend server returned non-JSON response. Make sure "node server.js" is running on port 5000.');
+        throw new Error('Backend server returned non-JSON response. Make sure the backend server is running.');
       }
 
       const data = await res.json();
@@ -394,21 +488,28 @@ export default function App() {
         setMessages([DEFAULT_WELCOME_MSG]);
       }
 
+      saveToAccountVault(normalizedEmail, {
+        user: data.user,
+        passwordPlain: authForm.password,
+        workerProfile: data.workerProfile || null,
+        chatHistory: data.chatHistory || []
+      });
+
       if (data.user.role === 'employer') {
         setOfferForm((prev) => ({
           ...prev,
           recruiterName: data.user.recruiterName || prev.recruiterName,
           companyName: data.user.companyName || prev.companyName
         }));
-        setView('employer');
+        navigateToView('employer');
       } else {
-        setView('card');
+        navigateToView('card');
       }
 
       localStorage.setItem('si_user_session', JSON.stringify(data));
       setAuthModalOpen(false);
     } catch (err) {
-      setAuthError(err.message || 'Could not connect to server on port 5000.');
+      setAuthError(err.message || 'Could not connect to server.');
     } finally {
       setAuthLoading(false);
     }
@@ -420,25 +521,26 @@ export default function App() {
     setAuthSuccess('');
 
     const signupAge = computeAgeFromDob(authForm.dob);
-    if (signupAge === null || signupAge < 15) {
-      setAuthError('Applicants must be at least 15 years old to register and apply for jobs.');
+    if (signupAge === null || signupAge < 18) {
+      setAuthError('Applicants must be at least 18 years old to register and apply for jobs.');
       return;
     }
 
     setAuthLoading(true);
     try {
+      const normalizedEmail = authForm.email.trim().toLowerCase();
       const res = await fetch(`${API_BASE}/api/auth/signup-worker`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName: authForm.fullName.trim(),
-          email: authForm.email.trim(),
+          email: normalizedEmail,
           password: authForm.password,
           dob: authForm.dob,
           profile: {
             ...profile,
             fullName: authForm.fullName.trim(),
-            email: authForm.email.trim(),
+            email: normalizedEmail,
             dob: authForm.dob
           }
         })
@@ -446,7 +548,7 @@ export default function App() {
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('Backend server returned non-JSON response. Make sure "node server.js" is running on port 5000.');
+        throw new Error('Backend server returned non-JSON response. Make sure the backend server is running.');
       }
 
       const data = await res.json();
@@ -459,21 +561,32 @@ export default function App() {
       const updatedProfile = {
         ...profile,
         ...(data.workerProfile || {}),
+        userId: data.user.id,
         fullName: authForm.fullName.trim(),
-        email: authForm.email.trim(),
+        email: normalizedEmail,
         dob: authForm.dob
+      };
+
+      const sessionPayload = {
+        ...data,
+        workerProfile: updatedProfile,
+        chatHistory: messages.slice(1)
       };
 
       setCurrentUser(data.user);
       setProfile(updatedProfile);
-      localStorage.setItem(
-        'si_user_session',
-        JSON.stringify({ ...data, workerProfile: updatedProfile })
-      );
+      localStorage.setItem('si_user_session', JSON.stringify(sessionPayload));
+      saveToAccountVault(normalizedEmail, {
+        user: data.user,
+        passwordPlain: authForm.password,
+        workerProfile: updatedProfile,
+        chatHistory: messages.slice(1)
+      });
+
       setAuthModalOpen(false);
-      setView('card');
+      navigateToView('card');
     } catch (err) {
-      setAuthError(err.message || 'Could not connect to server on port 5000.');
+      setAuthError(err.message || 'Could not connect to server.');
     } finally {
       setAuthLoading(false);
     }
@@ -506,7 +619,7 @@ export default function App() {
       }
       setAuthSuccess(data.message || 'Verification request submitted!');
     } catch {
-      setAuthError('Could not connect to server on port 5000.');
+      setAuthError('Could not connect to server.');
     } finally {
       setAuthLoading(false);
     }
@@ -531,52 +644,60 @@ export default function App() {
     }
 
     const age = computeAgeFromDob(profile.dob);
-    if (age === null || age < 15) {
-      const msg = 'You must be at least 15 years old to apply for jobs on Skill: Issued!.';
+    if (age === null || age < 18) {
+      const msg = 'You must be at least 18 years old to apply for jobs on Skill: Issued!.';
       setDobError(msg);
       setSetupFeedback(msg);
       scrollToSection(1);
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/api/workers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser?.id || null,
-          fullName: profile.fullName.trim(),
-          email: profile.email.trim(),
-          mobile: profile.mobile.trim(),
-          dob: profile.dob,
-          gender: profile.gender,
-          education: profile.education,
-          city: profile.city.trim() || 'Quezon City',
-          targetPay: profile.targetPay,
-          tracks: profile.tracks.length ? profile.tracks : ['General Shift Help'],
-          customSkills: profile.customSkills.trim() || 'Ready for immediate shift',
-          workExperience: profile.workExperience.trim() || 'Entry-level / First-time jobseeker',
-          gear: profile.gear,
-          badges: profile.badges
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.worker && currentUser) {
+    const normalizedProfile = {
+      ...profile,
+      fullName: profile.fullName.trim(),
+      email: profile.email.trim(),
+      mobile: profile.mobile.trim(),
+      city: profile.city.trim() || 'Quezon City',
+      tracks: profile.tracks.length ? profile.tracks : ['General Shift Help'],
+      customSkills: profile.customSkills.trim() || 'Ready for immediate shift',
+      workExperience: profile.workExperience.trim() || 'Entry-level / First-time jobseeker',
+      age
+    };
+
+    setProfile(normalizedProfile);
+
+    // Only persist to backend employer database if the user has a registered account
+    if (currentUser?.id) {
+      try {
+        const res = await fetch(`${API_BASE}/api/workers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            ...normalizedProfile
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const savedWorker = data.worker || { ...normalizedProfile, userId: currentUser.id };
           const updatedSession = {
             user: currentUser,
-            workerProfile: data.worker,
+            workerProfile: savedWorker,
             chatHistory: messages.slice(1)
           };
           localStorage.setItem('si_user_session', JSON.stringify(updatedSession));
+          saveToAccountVault(currentUser.email, {
+            user: currentUser,
+            workerProfile: savedWorker,
+            chatHistory: messages.slice(1)
+          });
         }
+      } catch (err) {
+        console.error('Failed to save profile:', err);
       }
-    } catch (err) {
-      console.error('Failed to save profile:', err);
     }
 
-    setView('card');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateToView('card');
   };
 
   const sendMessage = async (customPrompt) => {
@@ -617,7 +738,7 @@ export default function App() {
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('Backend server is not responding with JSON. Make sure "node server.js" is running on port 5000.');
+        throw new Error('Backend server is not responding with JSON. Make sure the backend server is running.');
       }
 
       const data = await res.json();
@@ -631,21 +752,27 @@ export default function App() {
       setMessages(finalMessages);
 
       if (currentUser) {
+        const persistedChat = finalMessages.slice(1);
         localStorage.setItem(
           'si_user_session',
           JSON.stringify({
             user: currentUser,
             workerProfile: profile,
-            chatHistory: finalMessages.slice(1)
+            chatHistory: persistedChat
           })
         );
+        saveToAccountVault(currentUser.email, {
+          user: currentUser,
+          workerProfile: profile,
+          chatHistory: persistedChat
+        });
       }
     } catch (err) {
       setMessages([
         ...updatedMessages,
         {
           role: 'model',
-          text: `Connection error: ${err.message || 'Please make sure the backend server is running on port 5000.'}`
+          text: `Connection error: ${err.message || 'Please make sure the backend server is running.'}`
         }
       ]);
     } finally {
@@ -660,7 +787,6 @@ export default function App() {
     return parts.map((part, idx) => {
       if (!part) return null;
 
-      // 1. Markdown hyperlink: [Label](https://...)
       const mdLinkMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
       if (mdLinkMatch) {
         return (
@@ -687,7 +813,6 @@ export default function App() {
         );
       }
 
-      // 2. Raw URL: https://... (strip trailing punctuation like periods or commas)
       if (/^https?:\/\//i.test(part)) {
         const cleanUrl = part.replace(/[.,;:!?]+$/, '');
         const trailingPunct = part.slice(cleanUrl.length);
@@ -725,7 +850,6 @@ export default function App() {
         );
       }
 
-      // 3. Bold text: **text**
       if (part.startsWith('**') && part.endsWith('**')) {
         return (
           <strong key={idx} style={{ color: '#29223B', fontWeight: 700 }}>
@@ -786,7 +910,8 @@ export default function App() {
   };
 
   const isVerifiedEmployer = currentUser?.role === 'employer' && currentUser?.verified;
-  const allWorkers = isVerifiedEmployer ? [...savedWorkers, ...SAMPLE_WORKERS] : [];
+  const registeredSavedWorkers = savedWorkers.filter((w) => Boolean(w.userId));
+  const allWorkers = isVerifiedEmployer ? [...registeredSavedWorkers, ...SAMPLE_WORKERS] : [];
 
   const filteredWorkers = allWorkers.filter((w) => {
     const matchesSearch =
@@ -799,7 +924,15 @@ export default function App() {
     const matchesTrack = empTrack === 'All' || w.tracks.includes(empTrack);
     const matchesBadges = empRequiredBadges.every((reqBadge) => w.badges.includes(reqBadge));
 
-    return matchesSearch && matchesCity && matchesTrack && matchesBadges;
+    const workerAge = Number(w.age) || computeAgeFromDob(w.dob) || 0;
+    const matchesAgeBracket =
+      empAgeBracket === 'All' ||
+      (empAgeBracket === '18-24' && workerAge >= 18 && workerAge <= 24) ||
+      (empAgeBracket === '25-34' && workerAge >= 25 && workerAge <= 34) ||
+      (empAgeBracket === '35-44' && workerAge >= 35 && workerAge <= 44) ||
+      (empAgeBracket === '45+' && workerAge >= 45);
+
+    return matchesSearch && matchesCity && matchesTrack && matchesBadges && matchesAgeBracket;
   });
 
   const handleSendStructuredOffer = async () => {
@@ -808,6 +941,11 @@ export default function App() {
 
     if (!isVerifiedEmployer) {
       setOfferFeedback('Only verified employer accounts can send job offers. Please sign in as a verified employer.');
+      return;
+    }
+
+    if (!selectedWorker.userId && !selectedWorker.isSample) {
+      setOfferFeedback('Offers can only be sent to workers with a registered Skill: Issued! account.');
       return;
     }
 
@@ -839,7 +977,7 @@ export default function App() {
         ? data.offers.filter((o) => o.employerId === currentUser.id)
         : [];
       setJobOffers(myOffers);
-      setOfferFeedback('Official job offer sent! Tracked under the "Job Offers" tab.');
+      setOfferFeedback('Official job offer sent! Tracked under the "Sent Offers" tab.');
     } catch {
       setOfferFeedback('Connection error. Please make sure the backend server is running.');
     }
@@ -877,7 +1015,7 @@ export default function App() {
   };
 
   // =========================================================================
-  // GLOBAL STYLES (PASTEL FOLDER-TAB & PLAYFUL STICKER THEME)
+  // GLOBAL STYLES (PASTEL FOLDER-TAB THEME + SMOOTH PAGE TRANSITIONS)
   // =========================================================================
   const globalStyles = (
     <style>{`
@@ -887,6 +1025,34 @@ export default function App() {
       body { background: #FAFBFD; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #29223B; }
       .si-page { min-height: 100vh; display: flex; flex-direction: column; background: #FAFBFD; }
       .si-display-font { font-family: 'Fraunces', Georgia, serif; }
+
+      /* Smooth Page & Card Transitions */
+      @keyframes siPageEnter {
+        0% {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes siModalPop {
+        0% {
+          opacity: 0;
+          transform: scale(0.97) translateY(8px);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+      .si-view-enter {
+        animation: siPageEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .si-modal-enter {
+        animation: siModalPop 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
 
       /* Header */
       .si-nav { width: 100%; min-height: 104px; background: #FFFFFF; border-bottom: 1px solid #ECEEF3; display: flex; align-items: center; justify-content: center; padding: 12px 32px; position: sticky; top: 0; z-index: 40; }
@@ -911,16 +1077,17 @@ export default function App() {
         line-height: 15px;
         color: #29223B;
         cursor: pointer;
-        transition: all 0.16s ease;
+        transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
       }
       .si-nav-tile:hover {
         border: 1px solid rgba(105, 81, 200, 0.35);
         box-shadow: 0px 3px 10px rgba(105, 81, 200, 0.18);
-        transform: translateY(-1px);
+        transform: translateY(-2px);
       }
       .si-nav-tile.active {
         border: 1.5px solid #6951C8;
         box-shadow: 0px 3px 10px rgba(105, 81, 200, 0.18);
+        transform: translateY(-1px);
       }
 
       .si-nav-right { display: flex; align-items: center; gap: 12px; }
@@ -990,7 +1157,7 @@ export default function App() {
 
       /* Folder Tab Cards */
       .si-cards { display: flex; flex-direction: column; gap: 28px; }
-      .si-folder-wrap { position: relative; }
+      .si-folder-wrap { position: relative; transition: transform 0.2s ease; }
       .si-folder-tab {
         display: inline-flex;
         align-items: center;
@@ -1038,11 +1205,12 @@ export default function App() {
       .si-sec-mint .si-folder-tab,
       .si-sec-mint .si-folder-body { background: #CBF5EA; }
 
-      .si-card { background: #FFFFFF; border: 1px solid #E5E8ED; border-radius: 16px; padding: 26px 28px; }
+      .si-card { background: #FFFFFF; border: 1px solid #E5E8ED; border-radius: 16px; padding: 26px 28px; transition: box-shadow 0.2s ease, transform 0.2s ease; }
+      .si-card:hover { box-shadow: 0 6px 20px rgba(41, 34, 59, 0.05); }
       .si-card-sub { font-weight: 500; font-size: 13px; line-height: 18px; color: #525B6B; margin-bottom: 18px; }
 
       .si-label { display: block; font-weight: 600; font-size: 12px; line-height: 15px; color: #374151; margin-bottom: 8px; }
-      .si-input { width: 100%; height: 46px; background: #FFFFFF; border: 1px solid #E2E5EC; border-radius: 8px; padding: 0 15px; font-family: inherit; font-size: 13px; color: #29223B; outline: none; }
+      .si-input { width: 100%; height: 46px; background: #FFFFFF; border: 1px solid #E2E5EC; border-radius: 8px; padding: 0 15px; font-family: inherit; font-size: 13px; color: #29223B; outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
       .si-input::placeholder { color: #8A93A2; }
       .si-input:focus { border-color: #B8B3F2; box-shadow: 0 0 0 3px rgba(184, 179, 242, 0.25); }
 
@@ -1111,10 +1279,10 @@ export default function App() {
         font-size: 13px;
         color: #FFFFFF;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition: all 0.16s ease;
       }
-      .si-pink-cta-btn:hover { background: #E97DC8; box-shadow: 0 4px 12px rgba(244, 150, 215, 0.35); }
-      .si-pink-cta-btn:disabled { background: #D8C7D3; cursor: not-allowed; box-shadow: none; }
+      .si-pink-cta-btn:hover { background: #E97DC8; box-shadow: 0 4px 12px rgba(244, 150, 215, 0.35); transform: translateY(-1px); }
+      .si-pink-cta-btn:disabled { background: #D8C7D3; cursor: not-allowed; box-shadow: none; transform: none; }
 
       .si-purple-btn {
         height: 44px;
@@ -1130,7 +1298,7 @@ export default function App() {
       }
       .si-purple-btn:hover { background: #574192; }
 
-      /* Clean Neutral Chat Bubbles (Shared by AI Coach & Offer Discussion) */
+      /* Clean Neutral Chat Bubbles */
       .si-chat-feed {
         display: flex;
         flex-direction: column;
@@ -1191,11 +1359,11 @@ export default function App() {
   );
 
   // =========================================================================
-  // LOGO COMPONENT (USES frontend/src/assets/LOGO2.png)
+  // LOGO COMPONENT
   // =========================================================================
   const renderLogo = (small = false) => (
     <div
-      onClick={() => setView(isVerifiedEmployer ? 'employer' : 'setup')}
+      onClick={() => navigateToView(isVerifiedEmployer ? 'employer' : 'setup')}
       style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', userSelect: 'none' }}
     >
       <img
@@ -1243,7 +1411,7 @@ export default function App() {
               <>
                 <button
                   type="button"
-                  onClick={() => setView('employer')}
+                  onClick={() => navigateToView('employer')}
                   className={`si-nav-tile ${view === 'employer' ? 'active' : ''}`}
                   style={{ background: '#DCFBF3' }}
                 >
@@ -1252,7 +1420,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView('offers')}
+                  onClick={() => navigateToView('offers')}
                   className={`si-nav-tile ${view === 'offers' ? 'active' : ''}`}
                   style={{ background: '#FFF7CC' }}
                 >
@@ -1276,7 +1444,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView('resources')}
+                  onClick={() => navigateToView('resources')}
                   className={`si-nav-tile ${view === 'resources' ? 'active' : ''}`}
                   style={{ background: '#FFE4EF' }}
                 >
@@ -1287,7 +1455,7 @@ export default function App() {
               <>
                 <button
                   type="button"
-                  onClick={() => setView('setup')}
+                  onClick={() => navigateToView('setup')}
                   className={`si-nav-tile ${view === 'setup' ? 'active' : ''}`}
                   style={{ background: '#F8D5FA' }}
                 >
@@ -1296,7 +1464,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView('card')}
+                  onClick={() => navigateToView('card')}
                   className={`si-nav-tile ${view === 'card' ? 'active' : ''}`}
                   style={{ background: '#FFF7CC' }}
                 >
@@ -1305,7 +1473,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView('offers')}
+                  onClick={() => navigateToView('offers')}
                   className={`si-nav-tile ${view === 'offers' ? 'active' : ''}`}
                   style={{ background: '#DCFBF3' }}
                 >
@@ -1329,7 +1497,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView('resources')}
+                  onClick={() => navigateToView('resources')}
                   className={`si-nav-tile ${view === 'resources' ? 'active' : ''}`}
                   style={{ background: '#FFE4EF' }}
                 >
@@ -1344,7 +1512,7 @@ export default function App() {
           {!isVerifiedEmployer && (
             <button
               type="button"
-              onClick={() => setView('employer')}
+              onClick={() => navigateToView('employer')}
               className="si-outline-btn"
               style={{
                 background: view === 'employer' ? '#F3EFFB' : '#FFFFFF',
@@ -1420,6 +1588,7 @@ export default function App() {
         }}
       >
         <div
+          className="si-modal-enter"
           style={{
             width: '100%',
             maxWidth: '500px',
@@ -1626,7 +1795,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="si-label">Date of Birth (Must be 15 or older)</label>
+                  <label className="si-label">Date of Birth (Must be 18 or older)</label>
                   <input
                     type="date"
                     required
@@ -1750,7 +1919,7 @@ export default function App() {
         {renderNavbar()}
         {renderAuthModal()}
 
-        <main className="si-main">
+        <main key="view-setup" className="si-main si-view-enter">
           <aside className="si-sidebar">
             <div className="si-guide-card">
               <div className="si-guide-header">
@@ -1842,7 +2011,7 @@ export default function App() {
 
                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                   <div style={{ flex: '1 1 320px', maxWidth: '420px' }}>
-                    <label className="si-label">Date of Birth * (Must be 15 or older to apply)</label>
+                    <label className="si-label">Date of Birth * (Must be 18 or older to apply)</label>
                     <input
                       type="date"
                       className="si-input"
@@ -1854,12 +2023,12 @@ export default function App() {
                         setProfile({ ...profile, dob: e.target.value });
                       }}
                     />
-                    {computedAge !== null && !isUnder15 && (
+                    {computedAge !== null && !isUnder18 && (
                       <div style={{ marginTop: '6px', fontSize: '12px', color: '#166534', fontWeight: 600 }}>
                         ✓ Age: {computedAge} years old (Eligible to apply)
                       </div>
                     )}
-                    {(isUnder15 || dobError) && (
+                    {(isUnder18 || dobError) && (
                       <div
                         style={{
                           marginTop: '8px',
@@ -1872,7 +2041,7 @@ export default function App() {
                           fontWeight: 600
                         }}
                       >
-                        🚫 {dobError || `You are ${computedAge} years old. Applicants under 15 cannot apply.`}
+                        🚫 {dobError || `You are ${computedAge} years old. Applicants under 18 cannot apply.`}
                       </div>
                     )}
                   </div>
@@ -2126,14 +2295,14 @@ export default function App() {
               <div>
                 <div className="si-cta-title">Ready!</div>
                 <div className="si-cta-sub">
-                  {isUnder15
-                    ? 'Applicants under 15 years old cannot submit an application.'
+                  {isUnder18
+                    ? 'Applicants under 18 years old cannot submit an application.'
                     : 'Chat with AI to see the best skill courses and job opportunities for you!'}
                 </div>
               </div>
               <button
                 type="button"
-                disabled={isUnder15}
+                disabled={isUnder18}
                 onClick={saveProfileAndContinue}
                 className="si-pink-cta-btn"
               >
@@ -2169,241 +2338,247 @@ export default function App() {
         {renderNavbar()}
         {renderAuthModal()}
 
-        {!currentUser && !isUsingSampleCard && (
-          <div className="si-auth-banner">
-            <div className="si-auth-banner-inner">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '18px' }}>🔒</span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#29223B' }}>
-                  Sign up to save chat history and account details.
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => openAuthModal('login')}
-                  className="si-outline-btn"
-                  style={{ height: '38px' }}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openAuthModal('signup-worker')}
-                  className="si-pink-cta-btn"
-                  style={{ height: '38px', padding: '0 22px' }}
-                >
-                  Sign Up for Free
-                </button>
+        <div key="view-card" className="si-view-enter" style={{ flex: 1 }}>
+          {!currentUser && !isUsingSampleCard && (
+            <div className="si-auth-banner">
+              <div className="si-auth-banner-inner">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>🔒</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#29223B' }}>
+                    Guest preview only — sign up to save your card, chat history, and receive job offers from employers.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => openAuthModal('login')}
+                    className="si-outline-btn"
+                    style={{ height: '38px' }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openAuthModal('signup-worker')}
+                    className="si-pink-cta-btn"
+                    style={{ height: '38px', padding: '0 22px' }}
+                  >
+                    Sign Up for Free
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="si-card-split">
-          <div className="si-folder-wrap si-sec-yellow" style={{ position: 'sticky', top: '120px' }}>
-            <div className="si-folder-tab">
-              <span className="si-folder-badge">ID</span>
-              <h2 className="si-folder-title">Digital Skill Card</h2>
-            </div>
+          <div className="si-card-split">
+            <div className="si-folder-wrap si-sec-yellow" style={{ position: 'sticky', top: '120px' }}>
+              <div className="si-folder-tab">
+                <span className="si-folder-badge">ID</span>
+                <h2 className="si-folder-title">Digital Skill Card</h2>
+              </div>
 
-            <div className="si-folder-body" style={{ border: '1px solid #F3E29B' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                <div>
-                  {isUsingSampleCard && (
-                    <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', background: '#F496D7', color: '#FFFFFF', padding: '4px 9px', borderRadius: '6px', fontWeight: 700 }}>
-                      Sample Digital Card
-                    </span>
-                  )}
-                  <h2 style={{ fontSize: '24px', fontWeight: 700, marginTop: isUsingSampleCard ? '8px' : '0px', color: '#29223B' }}>
-                    {displayCard.fullName}
-                  </h2>
-                  {displayCard.email && (
-                    <p style={{ fontSize: '13px', color: '#574192', marginTop: '4px', fontWeight: 500 }}>
-                      ✉️ {displayCard.email}
+              <div className="si-folder-body" style={{ border: '1px solid #F3E29B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                  <div>
+                    {isUsingSampleCard && (
+                      <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', background: '#F496D7', color: '#FFFFFF', padding: '4px 9px', borderRadius: '6px', fontWeight: 700 }}>
+                        Sample Digital Card
+                      </span>
+                    )}
+                    {!currentUser && !isUsingSampleCard && (
+                      <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', background: '#6951C8', color: '#FFFFFF', padding: '4px 9px', borderRadius: '6px', fontWeight: 700 }}>
+                        Unsaved Guest Card
+                      </span>
+                    )}
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, marginTop: !currentUser ? '8px' : '0px', color: '#29223B' }}>
+                      {displayCard.fullName}
+                    </h2>
+                    {displayCard.email && (
+                      <p style={{ fontSize: '13px', color: '#574192', marginTop: '4px', fontWeight: 500 }}>
+                        ✉️ {displayCard.email}
+                      </p>
+                    )}
+                    <p style={{ fontSize: '13px', color: '#525B6B', marginTop: '6px' }}>
+                      📍 {displayCard.city || 'Quezon City'} • Age: {displayAge} • Min Pay: {displayCard.targetPay}
                     </p>
-                  )}
-                  <p style={{ fontSize: '13px', color: '#525B6B', marginTop: '6px' }}>
-                    📍 {displayCard.city || 'Quezon City'} • Age: {displayAge} • Min Pay: {displayCard.targetPay}
-                  </p>
+                  </div>
+
+                  <button
+                    onClick={() => navigateToView('setup')}
+                    className="si-outline-btn"
+                    style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
+                  >
+                    {isUsingSampleCard ? 'Create Card →' : '← Edit'}
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setView('setup')}
-                  className="si-outline-btn"
-                  style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
-                >
-                  {isUsingSampleCard ? 'Create Card →' : '← Edit'}
-                </button>
-              </div>
-
-              <div style={{ marginTop: '18px', background: '#FFFFFF', color: '#29223B', padding: '18px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px', border: '1px solid #ECEEF3' }}>
-                <div>
-                  <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
-                    Job Tracks
-                  </strong>
-                  <span>{displayCard.tracks.join(', ') || 'None selected'}</span>
-                </div>
-                <div>
-                  <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
-                    Skills
-                  </strong>
-                  <span>{displayCard.customSkills || 'None listed'}</span>
-                </div>
-                <div>
-                  <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
-                    Experience
-                  </strong>
-                  <span>{displayCard.workExperience || 'Entry-level / First-time jobseeker'}</span>
-                </div>
-                <div>
-                  <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
-                    Materials Ready
-                  </strong>
-                  <span>{displayCard.gear.join(', ') || 'None selected'}</span>
-                </div>
-                <div>
-                  <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
-                    Document Badges
-                  </strong>
-                  <span>{displayCard.badges.length > 0 ? displayCard.badges.join(' • ') : 'None marked yet'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="si-folder-wrap si-sec-aqua">
-            <div className="si-folder-tab">
-              <span className="si-folder-badge">AI</span>
-              <h2 className="si-folder-title">Skill: Issued! Career Coach</h2>
-            </div>
-
-            <div className="si-folder-body" style={{ padding: '0', overflow: 'hidden', border: '1px solid #BCEEE9' }}>
-              <div style={{ padding: '16px 22px', borderBottom: '1px solid #BCEEE9', background: '#DDFBF9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#115E59' }}>
-                  {isUsingSampleCard
-                    ? 'AI Career Coach locked on sample card'
-                    : 'Tap a topic below or ask any question:'}
-                </span>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#574192', background: '#FFFFFF', padding: '4px 10px', borderRadius: '6px' }}>
-                  {isUsingSampleCard
-                    ? 'Sample Mode'
-                    : currentUser
-                    ? 'Chat Saved to Account ✓'
-                    : 'Guest Session'}
-                </span>
-              </div>
-
-              {isUsingSampleCard && (
-                <div
-                  style={{
-                    padding: '28px 24px',
-                    background: '#FFF7CC',
-                    borderBottom: '1px solid #F3E29B',
-                    textAlign: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '14px'
-                  }}
-                >
-                  <div style={{ fontSize: '26px' }}>🔒</div>
-                  <p style={{ fontSize: '14px', fontWeight: 700, color: '#29223B', maxWidth: '480px', lineHeight: '1.55' }}>
-                    This profile is a sample. Create your skill card or log into your account to access the AI Career Coach feature.
-                  </p>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => setView('setup')}
-                      className="si-pink-cta-btn"
-                      style={{ height: '40px', padding: '0 22px' }}
-                    >
-                      Create Your Skill Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openAuthModal('login')}
-                      className="si-outline-btn"
-                      style={{ height: '40px', padding: '0 20px' }}
-                    >
-                      Log Into Account
-                    </button>
+                <div style={{ marginTop: '18px', background: '#FFFFFF', color: '#29223B', padding: '18px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px', border: '1px solid #ECEEF3' }}>
+                  <div>
+                    <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
+                      Job Tracks
+                    </strong>
+                    <span>{displayCard.tracks.join(', ') || 'None selected'}</span>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
+                      Skills
+                    </strong>
+                    <span>{displayCard.customSkills || 'None listed'}</span>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
+                      Experience
+                    </strong>
+                    <span>{displayCard.workExperience || 'Entry-level / First-time jobseeker'}</span>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
+                      Materials Ready
+                    </strong>
+                    <span>{displayCard.gear.join(', ') || 'None selected'}</span>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#574192', display: 'block', fontSize: '11px', textTransform: 'uppercase' }}>
+                      Document Badges
+                    </strong>
+                    <span>{displayCard.badges.length > 0 ? displayCard.badges.join(' • ') : 'None marked yet'}</span>
                   </div>
                 </div>
-              )}
+              </div>
+            </div>
 
-              <div
-                style={{
-                  opacity: isUsingSampleCard ? 0.45 : 1,
-                  pointerEvents: isUsingSampleCard ? 'none' : 'auto',
-                  userSelect: isUsingSampleCard ? 'none' : 'auto'
-                }}
-              >
-                <div style={{ padding: '14px 22px', background: '#FFFFFF', borderBottom: '1px solid #ECEEF3', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {quickPrompts.map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      disabled={loading || isUsingSampleCard}
-                      onClick={() => sendMessage(item.prompt)}
-                      style={{
-                        padding: '8px 14px',
-                        background: '#FCE6FA',
-                        border: '1px solid #F3C6EF',
-                        color: '#574192',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: loading || isUsingSampleCard ? 'not-allowed' : 'pointer',
-                        opacity: loading ? 0.6 : 1
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+            <div className="si-folder-wrap si-sec-aqua">
+              <div className="si-folder-tab">
+                <span className="si-folder-badge">AI</span>
+                <h2 className="si-folder-title">Skill: Issued! Career Coach</h2>
+              </div>
+
+              <div className="si-folder-body" style={{ padding: '0', overflow: 'hidden', border: '1px solid #BCEEE9' }}>
+                <div style={{ padding: '16px 22px', borderBottom: '1px solid #BCEEE9', background: '#DDFBF9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#115E59' }}>
+                    {isUsingSampleCard
+                      ? 'AI Career Coach locked on sample card'
+                      : 'Tap a topic below or ask any question:'}
+                  </span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#574192', background: '#FFFFFF', padding: '4px 10px', borderRadius: '6px' }}>
+                    {isUsingSampleCard
+                      ? 'Sample Mode'
+                      : currentUser
+                      ? 'Chat Saved to Account ✓'
+                      : 'Guest Session (Not Saved)'}
+                  </span>
                 </div>
 
-                {/* Restored AI Career Coach message feed (AI on left, user on right, formatted links) */}
-                <div className="si-chat-feed" style={{ padding: '22px', height: '50vh', overflowY: 'auto', background: '#FAFBFD' }}>
-                  {messages.map((m, idx) => {
-                    const isUser = m.role === 'user';
-                    return (
-                      <div key={idx} className={`si-chat-row ${isUser ? 'right' : 'left'}`}>
-                        <div className={`si-chat-bubble ${isUser ? 'outgoing' : 'incoming'}`}>
-                          {isUser ? m.text : renderMessageWithLinks(m.text)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {loading && (
-                    <div style={{ fontSize: '13px', color: '#687281', fontStyle: 'italic' }}>
-                      Analyzing your Digital Skill Card...
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ padding: '16px 22px', borderTop: '1px solid #E3E7EC', background: '#FFFFFF', display: 'flex', gap: '12px' }}>
-                  <input
-                    type="text"
-                    disabled={isUsingSampleCard}
-                    placeholder={
-                      isUsingSampleCard
-                        ? 'Create your skill card or sign in to chat...'
-                        : 'Ask about matching jobs, skills, interview prep, or requirements...'
-                    }
-                    className="si-input"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                  />
-                  <button
-                    onClick={() => sendMessage()}
-                    disabled={loading || isUsingSampleCard}
-                    className="si-pink-cta-btn"
-                    style={{ height: '46px', padding: '0 26px' }}
+                {isUsingSampleCard && (
+                  <div
+                    style={{
+                      padding: '28px 24px',
+                      background: '#FFF7CC',
+                      borderBottom: '1px solid #F3E29B',
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '14px'
+                    }}
                   >
-                    Send
-                  </button>
+                    <div style={{ fontSize: '26px' }}>🔒</div>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#29223B', maxWidth: '480px', lineHeight: '1.55' }}>
+                      This profile is a sample. Create your skill card or log into your account to access the AI Career Coach feature.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => navigateToView('setup')}
+                        className="si-pink-cta-btn"
+                        style={{ height: '40px', padding: '0 22px' }}
+                      >
+                        Create Your Skill Card
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAuthModal('login')}
+                        className="si-outline-btn"
+                        style={{ height: '40px', padding: '0 20px' }}
+                      >
+                        Log Into Account
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    opacity: isUsingSampleCard ? 0.45 : 1,
+                    pointerEvents: isUsingSampleCard ? 'none' : 'auto',
+                    userSelect: isUsingSampleCard ? 'none' : 'auto'
+                  }}
+                >
+                  <div style={{ padding: '14px 22px', background: '#FFFFFF', borderBottom: '1px solid #ECEEF3', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {quickPrompts.map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        disabled={loading || isUsingSampleCard}
+                        onClick={() => sendMessage(item.prompt)}
+                        style={{
+                          padding: '8px 14px',
+                          background: '#FCE6FA',
+                          border: '1px solid #F3C6EF',
+                          color: '#574192',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: loading || isUsingSampleCard ? 'not-allowed' : 'pointer',
+                          opacity: loading ? 0.6 : 1
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="si-chat-feed" style={{ padding: '22px', height: '50vh', overflowY: 'auto', background: '#FAFBFD' }}>
+                    {messages.map((m, idx) => {
+                      const isUser = m.role === 'user';
+                      return (
+                        <div key={idx} className={`si-chat-row ${isUser ? 'right' : 'left'}`}>
+                          <div className={`si-chat-bubble ${isUser ? 'outgoing' : 'incoming'}`}>
+                            {isUser ? m.text : renderMessageWithLinks(m.text)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {loading && (
+                      <div style={{ fontSize: '13px', color: '#687281', fontStyle: 'italic' }}>
+                        Analyzing your Digital Skill Card...
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ padding: '16px 22px', borderTop: '1px solid #E3E7EC', background: '#FFFFFF', display: 'flex', gap: '12px' }}>
+                    <input
+                      type="text"
+                      disabled={isUsingSampleCard}
+                      placeholder={
+                        isUsingSampleCard
+                          ? 'Create your skill card or sign in to chat...'
+                          : 'Ask about matching jobs, skills, interview prep, or requirements...'
+                      }
+                      className="si-input"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                    />
+                    <button
+                      onClick={() => sendMessage()}
+                      disabled={loading || isUsingSampleCard}
+                      className="si-pink-cta-btn"
+                      style={{ height: '46px', padding: '0 26px' }}
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2424,7 +2599,7 @@ export default function App() {
         {renderNavbar()}
         {renderAuthModal()}
 
-        <div style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 50px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
+        <div key="view-offers" className="si-view-enter" style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
           <div className="si-folder-wrap si-sec-mint">
             <div className="si-folder-tab">
               <span className="si-folder-badge">★</span>
@@ -2467,7 +2642,7 @@ export default function App() {
                   : 'When a verified employer scouts your Digital Skill Card and sends an offer to your account, all role details, salary, working hours, and benefits will appear here.'}
               </p>
               {currentUser.role === 'employer' && (
-                <button type="button" onClick={() => setView('employer')} className="si-pink-cta-btn">
+                <button type="button" onClick={() => navigateToView('employer')} className="si-pink-cta-btn">
                   Browse Candidates in Employer View
                 </button>
               )}
@@ -2595,7 +2770,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Neutral, Monochrome Offer Discussion & Messages (Other person on left, yours on right) */}
+                {/* Lengthened Neutral Offer Discussion & Messages Box */}
                 <div style={{ marginTop: '18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
@@ -2626,8 +2801,11 @@ export default function App() {
                       background: '#FAFBFD',
                       border: '1px solid #ECEEF3',
                       borderRadius: '12px',
-                      padding: '16px',
-                      marginBottom: '12px'
+                      padding: '20px',
+                      marginBottom: '14px',
+                      minHeight: '360px',
+                      maxHeight: '500px',
+                      overflowY: 'auto'
                     }}
                   >
                     {(offer.messages || []).map((m, idx) => {
@@ -2709,7 +2887,7 @@ export default function App() {
         {renderNavbar()}
         {renderAuthModal()}
 
-        <div style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: '32px', flex: 1 }}>
+        <div key="view-resources" className="si-view-enter" style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: '32px', flex: 1 }}>
           <section className="si-folder-wrap si-sec-pink">
             <div className="si-folder-tab">
               <span className="si-folder-badge">01</span>
@@ -2973,7 +3151,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setView(isVerifiedEmployer ? 'employer' : 'card')}
+                  onClick={() => navigateToView(isVerifiedEmployer ? 'employer' : 'card')}
                   className="si-pink-cta-btn"
                   style={{ width: '100%', marginTop: '22px' }}
                 >
@@ -3001,6 +3179,8 @@ export default function App() {
         {renderAuthModal()}
 
         <div
+          key="view-employer-locked"
+          className="si-view-enter"
           style={{
             width: '100%',
             maxWidth: '720px',
@@ -3089,7 +3269,7 @@ export default function App() {
       {renderNavbar()}
       {renderAuthModal()}
 
-      <main className="si-main">
+      <main key="view-employer" className="si-main si-view-enter">
         <aside className="si-sidebar">
           <div className="si-guide-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -3100,6 +3280,7 @@ export default function App() {
                   setEmpSearch('');
                   setEmpCity('');
                   setEmpTrack('All');
+                  setEmpAgeBracket('All');
                   setEmpRequiredBadges([]);
                 }}
                 style={{ background: 'none', border: 'none', color: '#6951C8', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
@@ -3131,6 +3312,22 @@ export default function App() {
                 value={empCity}
                 onChange={(e) => setEmpCity(e.target.value)}
               />
+            </div>
+
+            <div style={{ marginTop: '16px' }}>
+              <label className="si-label">Age bracket (18+)</label>
+              <select
+                className="si-input"
+                style={{ height: '42px', fontSize: '13px', cursor: 'pointer' }}
+                value={empAgeBracket}
+                onChange={(e) => setEmpAgeBracket(e.target.value)}
+              >
+                <option value="All">All Ages (18+)</option>
+                <option value="18-24">18 – 24 years old</option>
+                <option value="25-34">25 – 34 years old</option>
+                <option value="35-44">35 – 44 years old</option>
+                <option value="45+">45+ years old</option>
+              </select>
             </div>
 
             <div style={{ marginTop: '16px' }}>
@@ -3198,12 +3395,13 @@ export default function App() {
             <div className="si-card" style={{ textAlign: 'center', padding: '48px 28px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#29223B' }}>No matching workers found</h3>
               <p style={{ marginTop: '8px', fontSize: '13px', color: '#697381' }}>
-                Try removing one of the required document filters or clearing your city search.
+                Try adjusting the age bracket, required document filters, or clearing your city search.
               </p>
             </div>
           ) : (
             filteredWorkers.map((worker) => {
               const workerOffers = jobOffers.filter((o) => o.workerId === worker.id);
+              const canReceiveOffer = Boolean(worker.userId) || Boolean(worker.isSample);
               return (
                 <div key={worker.id} className="si-card" style={{ padding: '24px 28px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
@@ -3234,6 +3432,7 @@ export default function App() {
 
                     <button
                       type="button"
+                      disabled={!canReceiveOffer}
                       onClick={() => {
                         setOfferFeedback('');
                         setSelectedWorker(worker);
@@ -3241,7 +3440,7 @@ export default function App() {
                       className="si-pink-cta-btn"
                       style={{ height: '40px', padding: '0 22px' }}
                     >
-                      Send Job Offer
+                      {canReceiveOffer ? 'Send Job Offer' : 'Unregistered Account'}
                     </button>
                   </div>
 
@@ -3314,6 +3513,7 @@ export default function App() {
           }}
         >
           <div
+            className="si-modal-enter"
             style={{
               width: '100%',
               maxWidth: '580px',
@@ -3452,7 +3652,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setSelectedWorker(null);
-                      setView('offers');
+                      navigateToView('offers');
                     }}
                     className="si-outline-btn"
                     style={{ height: '44px' }}
