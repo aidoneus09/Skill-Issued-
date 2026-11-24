@@ -58,21 +58,42 @@ function hashPassword(pw) {
   return crypto.createHash('sha256').update(String(pw)).digest('hex');
 }
 
+// Inside your default DB / seed initialization in backend/server.js
 const DEFAULT_DB = {
   users: [
     {
       id: 'emp-jollibee-001',
-      role: 'employer',
+      name: 'Maria Clara Santos',
       email: 'hr.manager@jollibee.com.ph',
-      password: hashPassword('Jollibee2026!'),
-      recruiterName: 'Maria Clara Reyes (Talent Acquisition Lead)',
-      companyName: 'Jollibee Foods Corporation (JFC)',
-      verified: true,
-      createdAt: '2026-01-15T08:00:00.000Z'
+      password: 'Jollibee2026!',
+      role: 'employer',
+      companyName: 'Jollibee Foods Corp',
+      verified: true
+    },
+    {
+      id: 'worker-aiden-001',
+      name: 'Aiden Umali',
+      email: 'aiden.umali@hotmail.com',
+      password: 'PASSWORD',
+      role: 'worker',
+      verified: true
     }
   ],
-  employerRequests: [],
-  workers: [],
+  workers: [
+    {
+      id: 'profile-aiden-001',
+      userId: 'worker-aiden-001',
+      name: 'Aiden Umali',
+      email: 'aiden.umali@hotmail.com',
+      age: 22,
+      birthdate: '2004-05-14',
+      location: 'Quezon City, Metro Manila',
+      education: 'Senior High School Graduate',
+      skills: 'Customer Service, Cash Handling, Inventory Management, Basic MS Office',
+      experience: '1 year part-time retail and food service crew',
+      preferredRole: 'Service Crew / Warehouse & Retail Associate'
+    }
+  ],
   offers: [],
   chatHistories: {}
 };

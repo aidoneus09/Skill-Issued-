@@ -32,6 +32,35 @@ const SAMPLE_WORKERS = [
   }
 ];
 
+const SAMPLE_AIDEN_ACCOUNT = {
+  user: {
+    id: 'worker-aiden-001',
+    fullName: 'Aiden Umali',
+    email: 'aiden.umali@hotmail.com',
+    dob: '2004-05-14',
+    role: 'worker',
+    verified: true
+  },
+  workerProfile: {
+    id: 'profile-aiden-001',
+    userId: 'worker-aiden-001',
+    fullName: 'Aiden Umali',
+    email: 'aiden.umali@hotmail.com',
+    mobile: '9171234567',
+    dob: '2004-05-14',
+    age: 22,
+    gender: 'Male',
+    education: 'High School Diploma',
+    city: 'Quezon City, Metro Manila',
+    targetPay: '₱610',
+    tracks: ['Food Service', 'Warehouse and Logistics', 'Retail and Promo'],
+    customSkills: 'Customer Service, Cash Handling, Inventory Management, Basic MS Office',
+    workExperience: '1 year part-time retail and food service crew',
+    gear: ['Phone', 'Work shoes'],
+    badges: ['Barangay Clearance', 'Health Certificate', 'NBI Clearance']
+  }
+};
+
 const COURSE_CATEGORIES = [
   { name: 'All', bg: '#F8D5FA', color: '#4A2559', border: '#E48CEB' },
   { name: 'Finance and Corporate Services', bg: '#FFF7CC', color: '#78350F', border: '#F59E0B' },
@@ -327,7 +356,7 @@ export default function App() {
     }
   }, []);
 
-// Fetch & auto-refresh job offers in real time when viewing Offers
+  // Fetch & auto-refresh job offers in real time when viewing Offers
   useEffect(() => {
     if (!currentUser?.id) {
       setJobOffers([]);
@@ -355,24 +384,6 @@ export default function App() {
     const timer = setInterval(fetchOffers, intervalMs);
     return () => clearInterval(timer);
   }, [currentUser, view]);
-
-  // Fetch registered worker profiles ONLY when signed in as a verified employer
-  useEffect(() => {
-    if (currentUser?.role === 'employer' && currentUser?.verified) {
-      fetch(`${API_BASE}/api/workers?employerId=${encodeURIComponent(currentUser.id)}`, {
-        headers: { 'x-employer-id': currentUser.id }
-      })
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setSavedWorkers(data.filter((w) => Boolean(w.userId)));
-          }
-        })
-        .catch((err) => console.error('Could not load saved workers:', err));
-    } else {
-      setSavedWorkers([]);
-    }
-  }, [currentUser]);
 
   // Fetch registered worker profiles ONLY when signed in as a verified employer
   useEffect(() => {
@@ -468,7 +479,18 @@ export default function App() {
     setAuthLoading(true);
 
     const normalizedEmail = authForm.email.trim().toLowerCase();
-    const vaultEntry = getAccountVault()[normalizedEmail];
+    const isSampleAidenLogin =
+      normalizedEmail === 'aiden.umali@hotmail.com' && authForm.password === 'PASSWORD';
+    const vaultEntry =
+      getAccountVault()[normalizedEmail] ||
+      (isSampleAidenLogin
+        ? {
+            user: SAMPLE_AIDEN_ACCOUNT.user,
+            passwordPlain: 'PASSWORD',
+            workerProfile: SAMPLE_AIDEN_ACCOUNT.workerProfile,
+            chatHistory: []
+          }
+        : null);
 
     try {
       let res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -480,7 +502,7 @@ export default function App() {
         })
       });
 
-      // If backend restarted and lost the account, restore from local vault if credentials match
+      // If backend restarted and lost the account, restore from local vault or sample seed if credentials match
       if (res.status === 401 && vaultEntry && vaultEntry.passwordPlain === authForm.password) {
         const syncRes = await fetch(`${API_BASE}/api/auth/sync`, {
           method: 'POST',
@@ -502,6 +524,12 @@ export default function App() {
           } else {
             setMessages([DEFAULT_WELCOME_MSG]);
           }
+          saveToAccountVault(normalizedEmail, {
+            user: syncedData.user,
+            passwordPlain: authForm.password,
+            workerProfile: syncedData.workerProfile || null,
+            chatHistory: syncedData.chatHistory || []
+          });
           localStorage.setItem('si_user_session', JSON.stringify(syncedData));
           setAuthModalOpen(false);
           navigateToView(syncedData.user.role === 'employer' ? 'employer' : 'card');
@@ -833,18 +861,18 @@ export default function App() {
   };
 
   const formatInlineMarkdown = (line) => {
-    const tokenRegex = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>()]+|\*\*[^*]+\*\*)/g;
+    const tokenRegex = /(\*\*\[[^\]]+\]\(\s*https?:\/\/[^\s)]+\s*\)\*\*|\[[^\]]+\]\(\s*https?:\/\/[^\s)]+\s*\)|https?:\/\/[^\s<>()]+|\*\*[^*]+\*\*)/g;
     const parts = line.split(tokenRegex);
 
     return parts.map((part, idx) => {
       if (!part) return null;
 
-      const mdLinkMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+      const mdLinkMatch = part.match(/^(?:\*\*)?\[([^\]]+)\]\(\s*(https?:\/\/[^\s)]+)\s*\)(?:\*\*)?$/);
       if (mdLinkMatch) {
         return (
           <a
             key={idx}
-            href={mdLinkMatch[2]}
+            href={mdLinkMatch[2].trim()}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -856,7 +884,7 @@ export default function App() {
               padding: '2px 8px',
               borderRadius: '6px',
               textDecoration: 'underline',
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: '13px'
             }}
           >
@@ -1643,7 +1671,7 @@ export default function App() {
           className="si-modal-enter"
           style={{
             width: '100%',
-            maxWidth: '500px',
+            maxWidth: '580px',
             background: '#FFFFFF',
             borderRadius: '18px',
             border: '1px solid #E3E7EC',
@@ -1792,42 +1820,112 @@ export default function App() {
                 <div
                   style={{
                     marginTop: '6px',
-                    padding: '14px',
-                    background: '#FFF7CC',
-                    border: '1px solid #F3E29B',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    color: '#5C4A1E'
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '12px'
                   }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                    Sample Verified Employer (Jollibee Foods Corp)
-                  </div>
-                  <div>Email: <code>hr.manager@jollibee.com.ph</code></div>
-                  <div>Password: <code>Jollibee2026!</code></div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAuthForm({
-                        ...authForm,
-                        email: 'hr.manager@jollibee.com.ph',
-                        password: 'Jollibee2026!'
-                      })
-                    }
+                  {/* Sample Verified Employer Card */}
+                  <div
                     style={{
-                      marginTop: '8px',
-                      padding: '6px 12px',
-                      background: '#6951C8',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer'
+                      padding: '14px',
+                      background: '#FFF7CC',
+                      border: '1px solid #F3E29B',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      color: '#5C4A1E',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '10px'
                     }}
                   >
-                    Auto-Fill Jollibee Hiring Manager Login
-                  </button>
+                    <div>
+                      <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                        Sample Verified Employer (Jollibee Foods Corp)
+                      </div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        Email: <code>hr.manager@jollibee.com.ph</code>
+                      </div>
+                      <div>
+                        Password: <code>Jollibee2026!</code>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuthForm({
+                          ...authForm,
+                          email: 'hr.manager@jollibee.com.ph',
+                          password: 'Jollibee2026!'
+                        })
+                      }
+                      style={{
+                        padding: '7px 12px',
+                        background: '#6951C8',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      Auto-Fill Jollibee Hiring Manager Login
+                    </button>
+                  </div>
+
+                  {/* Sample Worker Card */}
+                  <div
+                    style={{
+                      padding: '14px',
+                      background: '#E8FBF5',
+                      border: '1px solid #A7F3D0',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      color: '#065F46',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '10px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                        Sample Worker Account (Aiden Umali)
+                      </div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        Email: <code>aiden.umali@hotmail.com</code>
+                      </div>
+                      <div>
+                        Password: <code>PASSWORD</code>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuthForm({
+                          ...authForm,
+                          email: 'aiden.umali@hotmail.com',
+                          password: 'PASSWORD'
+                        })
+                      }
+                      style={{
+                        padding: '7px 12px',
+                        background: '#059669',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      Auto-Fill Worker Login
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -2645,9 +2743,6 @@ export default function App() {
     );
   }
 
-  // =========================================================================
-  // PART 3: JOB OFFERS TAB (SCOPED TO CURRENT LOGGED-IN USER)
-  // =========================================================================
   // =========================================================================
   // PART 3: JOB OFFERS TAB (WITH RECIPIENT SIDEBAR FOR EMPLOYERS)
   // =========================================================================
