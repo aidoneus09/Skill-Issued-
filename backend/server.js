@@ -21,7 +21,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Retry and fallback helper for temporary 503 / 429 demand spikes
 async function generateWithFallback(aiClient, params) {
-  const modelsToTry = [params.model || 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  const modelsToTry = [params.model || 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
   let lastError;
 
   for (const modelName of modelsToTry) {
@@ -85,7 +85,6 @@ function readDB() {
     }
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
-    // Ensure pre-made Jollibee account always exists
     const hasJollibee = (parsed.users || []).some(
       (u) => u.email.toLowerCase() === 'hr.manager@jollibee.com.ph'
     );
@@ -183,9 +182,9 @@ app.post('/api/auth/signup-worker', (req, res) => {
   }
 
   const age = calculateAge(dob);
-  if (age === null || age < 15) {
+  if (age === null || age < 18) {
     return res.status(403).json({
-      error: 'Applicants must be at least 15 years old to create an account and apply for work.'
+      error: 'Applicants must be at least 18 years old to create an account and apply for work.'
     });
   }
 
@@ -231,6 +230,67 @@ app.post('/api/auth/signup-worker', (req, res) => {
 
   const { password: _, ...safeUser } = newUser;
   res.status(201).json({ user: safeUser, workerProfile: workerCard, chatHistory: [] });
+});
+
+// POST /api/auth/sync — Re-hydrates account, profile & chat history if backend restarted
+app.post('/api/auth/sync', (req, res) => {
+  const { user, passwordHash, workerProfile, chatHistory } = req.body;
+  if (!user?.id || !user?.email) {
+    return res.status(400).json({ error: 'Invalid sync payload.' });
+  }
+
+  const db = readDB();
+  const normalizedEmail = user.email.trim().toLowerCase();
+  let existingUser = db.users.find(
+    (u) => u.id === user.id || u.email.toLowerCase() === normalizedEmail
+  );
+
+  if (!existingUser) {
+    existingUser = {
+      ...user,
+      email: normalizedEmail,
+      password: passwordHash || hashPassword('RestoredSession2026!')
+    };
+    db.users.push(existingUser);
+  }
+
+  if (existingUser.role === 'worker' && workerProfile) {
+    const age = calculateAge(workerProfile.dob || existingUser.dob) || existingUser.age || 18;
+    if (age >= 18) {
+      const card = {
+        ...workerProfile,
+        id: workerProfile.id || `w-${existingUser.id}`,
+        userId: existingUser.id,
+        fullName: workerProfile.fullName || existingUser.fullName,
+        email: normalizedEmail,
+        age
+      };
+      db.workers = [
+        card,
+        ...db.workers.filter((w) => w.userId !== existingUser.id && w.email !== normalizedEmail)
+      ];
+    }
+  }
+
+  if (Array.isArray(chatHistory) && chatHistory.length > 0) {
+    const serverHistory = db.chatHistories[existingUser.id] || [];
+    if (chatHistory.length >= serverHistory.length) {
+      db.chatHistories[existingUser.id] = chatHistory;
+    }
+  }
+
+  writeDB(db);
+  const { password: _, ...safeUser } = existingUser;
+  const latestWorker =
+    existingUser.role === 'worker'
+      ? db.workers.find((w) => w.userId === existingUser.id || w.email === normalizedEmail) || null
+      : null;
+
+  res.json({
+    user: safeUser,
+    workerProfile: latestWorker,
+    chatHistory: db.chatHistories[existingUser.id] || []
+  });
 });
 
 // POST /api/auth/request-employer
@@ -356,27 +416,51 @@ app.get('/api/workers', (req, res) => {
     });
   }
 
-  res.json(db.workers);
+  // Only return registered worker accounts (exclude any unlinked guest records)
+  const registeredWorkers = db.workers.filter((w) => Boolean(w.userId));
+  res.json(registeredWorkers);
 });
 
 app.post('/api/workers', (req, res) => {
   const { dob, userId, email } = req.body;
   const age = calculateAge(dob);
-  if (age === null || age < 15) {
+  if (age === null || age < 18) {
     return res.status(403).json({
-      error: 'Applicants under 15 years old cannot apply for jobs.'
+      error: 'Applicants must be at least 18 years old to apply for jobs.'
+    });
+  }
+
+  // Do NOT save guest profiles to the employer database if user has no account
+  if (!userId) {
+    return res.status(200).json({
+      guestOnly: true,
+      worker: {
+        id: 'guest-session',
+        ...req.body,
+        age
+      }
     });
   }
 
   const db = readDB();
+  const account = db.users.find((u) => u.id === userId && u.role === 'worker');
+  if (!account) {
+    return res.status(403).json({
+      error: 'Valid worker account required to publish a Digital Skill Card to employers.'
+    });
+  }
+
+  const normalizedEmail = (email || account.email || '').trim().toLowerCase();
   const existingIdx = db.workers.findIndex(
-    (w) => (userId && w.userId === userId) || (email && w.email === email.trim().toLowerCase())
+    (w) => w.userId === userId || (normalizedEmail && w.email === normalizedEmail)
   );
 
   const workerEntry = {
-    id: existingIdx >= 0 ? db.workers[existingIdx].id : `w-${Date.now()}`,
+    id: existingIdx >= 0 ? db.workers[existingIdx].id : `w-${userId}`,
     isNew: true,
     ...req.body,
+    userId,
+    email: normalizedEmail,
     age
   };
 
@@ -390,7 +474,7 @@ app.post('/api/workers', (req, res) => {
   res.status(201).json({ worker: workerEntry, workers: db.workers });
 });
 
-// GET /api/offers — Retrieve all structured job offers
+// GET /api/offers — Retrieve structured job offers for logged-in user
 app.get('/api/offers', (req, res) => {
   const userId = req.headers['x-user-id'] || req.query.userId;
   if (!userId) {
@@ -408,7 +492,6 @@ app.get('/api/offers', (req, res) => {
     return res.json(employerOffers);
   }
 
-  // Worker account: match offers sent to their worker profile ID or email
   const workerProfile = db.workers.find(
     (w) => w.userId === user.id || w.email?.toLowerCase() === user.email?.toLowerCase()
   );
@@ -422,7 +505,7 @@ app.get('/api/offers', (req, res) => {
   res.json(workerOffers);
 });
 
-// POST /api/offers — Verified employers send structured job offers
+// POST /api/offers — Verified employers send structured job offers ONLY to registered accounts
 app.post('/api/offers', (req, res) => {
   const {
     employerId,
@@ -444,6 +527,21 @@ app.post('/api/offers', (req, res) => {
   if (!employer || !employer.verified) {
     return res.status(403).json({
       error: 'Only verified employer accounts can send job offers to workers.'
+    });
+  }
+
+  // Ensure recipient has a registered worker account (or is the built-in sample card)
+  const targetWorker = db.workers.find((w) => w.id === workerId && Boolean(w.userId));
+  const targetUser = db.users.find(
+    (u) =>
+      u.role === 'worker' &&
+      ((targetWorker && u.id === targetWorker.userId) ||
+        (workerEmail && u.email.toLowerCase() === workerEmail.trim().toLowerCase()))
+  );
+
+  if (!targetWorker && !targetUser && workerId !== 'w-juan-sample') {
+    return res.status(403).json({
+      error: 'Job offers can only be sent to workers with a registered Skill: Issued! account.'
     });
   }
 
@@ -540,7 +638,7 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
     ];
 
     const response = await generateWithFallback(ai, {
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       contents,
       config: {
         systemInstruction
@@ -549,7 +647,7 @@ ${JSON.stringify(skillsData.slice(0, 100))}`;
 
     const replyText = response.text || 'Sorry, I could not generate a response.';
 
-    // Persist chat history if user is logged in
+    // Persist chat history only if user has a registered account
     if (userId) {
       const db = readDB();
       const existing = db.chatHistories[userId] || [];
