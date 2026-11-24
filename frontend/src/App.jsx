@@ -185,6 +185,7 @@ export default function App() {
   // Job Offers State (Strictly scoped to logged-in user)
   const [jobOffers, setJobOffers] = useState([]);
   const [offerReplyInputs, setOfferReplyInputs] = useState({});
+  const [selectedOfferId, setSelectedOfferId] = useState('ALL');
 
   // AI Chat State
   const [messages, setMessages] = useState([DEFAULT_WELCOME_MSG]);
@@ -2002,7 +2003,7 @@ export default function App() {
             </div>
 
             <div className="si-reassure">
-              <div className="si-reassure-title">We find jobs perfectly you.</div>
+              <div className="si-reassure-title">We find skills and jobs perfectly you.</div>
               <div className="si-reassure-body">
                 No experience yet? Indicate your skills and strengths and we will work from there.
               </div>
@@ -2231,7 +2232,7 @@ export default function App() {
 
                 <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
                   <div>
-                    <label className="si-label">Past skills</label>
+                    <label className="si-label">Current skills</label>
                     <textarea
                       className="si-textarea-lg"
                       placeholder="e.g. Customer service, cooking, stock handling, or using a computer"
@@ -2357,7 +2358,7 @@ export default function App() {
                 onClick={saveProfileAndContinue}
                 className="si-pink-cta-btn"
               >
-                Find my matches
+                Start my career!
               </button>
             </div>
           </div>
@@ -2647,19 +2648,250 @@ export default function App() {
   // =========================================================================
   // PART 3: JOB OFFERS TAB (SCOPED TO CURRENT LOGGED-IN USER)
   // =========================================================================
+  // =========================================================================
+  // PART 3: JOB OFFERS TAB (WITH RECIPIENT SIDEBAR FOR EMPLOYERS)
+  // =========================================================================
   if (view === 'offers') {
+    const isEmployerOffersView = currentUser?.role === 'employer';
+    const displayedOffers =
+      isEmployerOffersView && selectedOfferId !== 'ALL'
+        ? jobOffers.filter((o) => o.id === selectedOfferId)
+        : jobOffers;
+
+    const renderOfferCard = (offer) => (
+      <div key={offer.id} className="si-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid #ECEEF3', paddingBottom: '18px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, background: '#CBF5EA', color: '#065F46', padding: '4px 10px', borderRadius: '6px' }}>
+                VERIFIED EMPLOYER OFFER
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background:
+                    offer.status === 'Accepted'
+                      ? '#DCFCE7'
+                      : offer.status === 'Declined'
+                      ? '#FEE2E2'
+                      : '#FFF7CC',
+                  color:
+                    offer.status === 'Accepted'
+                      ? '#166534'
+                      : offer.status === 'Declined'
+                      ? '#991B1B'
+                      : '#78350F'
+                }}
+              >
+                {offer.status}
+              </span>
+            </div>
+            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#29223B', marginTop: '10px' }}>
+              {offer.jobTitle} — {offer.companyName}
+            </h2>
+            <p style={{ fontSize: '13px', color: '#687281', marginTop: '4px' }}>
+              Candidate: <strong>{offer.workerName}</strong> {offer.workerEmail ? `(${offer.workerEmail})` : ''}
+            </p>
+          </div>
+
+          {currentUser.role === 'worker' && offer.status === 'Pending Worker Response' && (
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => handleOfferReplyOrStatus(offer.id, 'Accepted')}
+                className="si-pink-cta-btn"
+                style={{ height: '40px', padding: '0 22px' }}
+              >
+                Accept Offer ✓
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOfferReplyOrStatus(offer.id, 'Declined')}
+                className="si-outline-btn"
+                style={{ height: '40px', padding: '0 18px', borderColor: '#FCA5A5', color: '#991B1B' }}
+              >
+                Decline
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: '18px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '16px',
+            background: '#FFF7CC',
+            padding: '18px',
+            borderRadius: '12px'
+          }}
+        >
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              Who is scouting for workers
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
+              {offer.recruiterName}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              Who they work for
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
+              {offer.companyName}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              What job will they offer
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
+              {offer.jobTitle}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              Salary
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#166534', marginTop: '4px' }}>
+              {offer.salary}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              Working Hours
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 500, color: '#29223B', marginTop: '4px' }}>
+              {offer.workingHours}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
+              Employee Benefits
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 500, color: '#29223B', marginTop: '4px' }}>
+              {offer.benefits || 'Not specified'}
+            </div>
+          </div>
+        </div>
+
+        {/* Offer Discussion & Messages Box */}
+        <div style={{ marginTop: '18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
+              Offer Discussion & Messages
+            </span>
+            {currentUser?.role === 'employer' &&
+              offer.messages?.length > 0 &&
+              offer.messages[offer.messages.length - 1].senderRole === 'worker' && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: '#F1F3F6',
+                    color: '#29223B',
+                    border: '1px solid #E2E5EC',
+                    padding: '3px 10px',
+                    borderRadius: '6px'
+                  }}
+                >
+                  💬 New reply from {offer.workerName}
+                </span>
+              )}
+          </div>
+
+          <div
+            ref={(el) => {
+              offerChatRefs.current[offer.id] = el;
+            }}
+            className="si-chat-feed"
+            style={{
+              background: '#FAFBFD',
+              border: '1px solid #ECEEF3',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '14px',
+              minHeight: '360px',
+              maxHeight: '500px',
+              overflowY: 'auto',
+              scrollBehavior: 'smooth'
+            }}
+          >
+            {(offer.messages || []).map((m, idx) => {
+              const isMe = m.senderRole === currentUser?.role;
+              return (
+                <div key={idx} className={`si-chat-row ${isMe ? 'right' : 'left'}`}>
+                  <div className={`si-chat-bubble ${isMe ? 'outgoing' : 'incoming'}`}>
+                    {!isMe && (
+                      <div className="si-chat-sender">
+                        {m.senderName} ({m.senderRole === 'employer' ? 'Employer' : 'Applicant'})
+                      </div>
+                    )}
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              type="text"
+              className="si-input"
+              style={{ height: '42px', fontSize: '13px' }}
+              placeholder={
+                currentUser?.role === 'employer'
+                  ? `Reply to ${offer.workerName}'s questions about schedule, pay, or requirements...`
+                  : 'Write a reply or question regarding this job offer...'
+              }
+              value={offerReplyInputs[offer.id] || ''}
+              onChange={(e) =>
+                setOfferReplyInputs((prev) => ({ ...prev, [offer.id]: e.target.value }))
+              }
+              onKeyDown={(e) => e.key === 'Enter' && handleOfferReplyOrStatus(offer.id)}
+            />
+            <button
+              type="button"
+              onClick={() => handleOfferReplyOrStatus(offer.id)}
+              className="si-neutral-reply-btn"
+            >
+              {currentUser?.role === 'employer' ? 'Send Reply' : 'Reply'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
     return (
       <div className="si-page">
         {globalStyles}
         {renderNavbar()}
         {renderAuthModal()}
 
-        <div key="view-offers" className="si-view-enter" style={{ width: '100%', maxWidth: '1376px', margin: '32px auto', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
+        <div
+          key="view-offers"
+          className="si-view-enter"
+          style={{
+            width: '100%',
+            maxWidth: '1376px',
+            margin: '32px auto',
+            padding: '0 32px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '28px',
+            flex: 1
+          }}
+        >
           <div className="si-folder-wrap si-sec-mint">
             <div className="si-folder-tab">
               <span className="si-folder-badge">★</span>
               <h1 className="si-folder-title">
-                {currentUser?.role === 'employer'
+                {isEmployerOffersView
                   ? `Sent Job Offers (${jobOffers.length})`
                   : `My Job Offers (${jobOffers.length})`}
               </h1>
@@ -2692,226 +2924,105 @@ export default function App() {
             <div className="si-card" style={{ textAlign: 'center', padding: '56px 28px' }}>
               <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#29223B' }}>No job offers yet</h3>
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#697381', maxWidth: '520px', margin: '8px auto 20px' }}>
-                {currentUser.role === 'employer'
+                {isEmployerOffersView
                   ? 'You have not sent any job offers yet. Browse candidates in the Employer Portal to send an official offer.'
                   : 'When a verified employer scouts your Digital Skill Card and sends an offer to your account, all role details, salary, working hours, and benefits will appear here.'}
               </p>
-              {currentUser.role === 'employer' && (
+              {isEmployerOffersView && (
                 <button type="button" onClick={() => navigateToView('employer')} className="si-pink-cta-btn">
                   Browse Candidates in Employer View
                 </button>
               )}
             </div>
-          ) : (
-            jobOffers.map((offer) => (
-              <div key={offer.id} className="si-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid #ECEEF3', paddingBottom: '18px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, background: '#CBF5EA', color: '#065F46', padding: '4px 10px', borderRadius: '6px' }}>
-                        VERIFIED EMPLOYER OFFER
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          padding: '4px 10px',
-                          borderRadius: '6px',
-                          background:
-                            offer.status === 'Accepted'
-                              ? '#DCFCE7'
-                              : offer.status === 'Declined'
-                              ? '#FEE2E2'
-                              : '#FFF7CC',
-                          color:
-                            offer.status === 'Accepted'
-                              ? '#166534'
-                              : offer.status === 'Declined'
-                              ? '#991B1B'
-                              : '#78350F'
-                        }}
-                      >
-                        {offer.status}
-                      </span>
+          ) : isEmployerOffersView ? (
+            <div className="si-main" style={{ margin: 0, padding: 0 }}>
+              {/* Left Sidebar Listing All Users Sent Job Offers */}
+              <aside className="si-sidebar">
+                <div className="si-guide-card" style={{ padding: '20px 16px' }}>
+                  <div className="si-guide-header">
+                    <div className="si-guide-title">Candidates Offered</div>
+                    <div className="si-guide-sub">
+                      {jobOffers.length} {jobOffers.length === 1 ? 'offer sent' : 'offers sent'}
                     </div>
-                    <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#29223B', marginTop: '10px' }}>
-                      {offer.jobTitle} — {offer.companyName}
-                    </h2>
-                    <p style={{ fontSize: '13px', color: '#687281', marginTop: '4px' }}>
-                      Candidate: <strong>{offer.workerName}</strong> {offer.workerEmail ? `(${offer.workerEmail})` : ''}
-                    </p>
                   </div>
 
-                  {currentUser.role === 'worker' && offer.status === 'Pending Worker Response' && (
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleOfferReplyOrStatus(offer.id, 'Accepted')}
-                        className="si-pink-cta-btn"
-                        style={{ height: '40px', padding: '0 22px' }}
-                      >
-                        Accept Offer ✓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOfferReplyOrStatus(offer.id, 'Declined')}
-                        className="si-outline-btn"
-                        style={{ height: '40px', padding: '0 18px', borderColor: '#FCA5A5', color: '#991B1B' }}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <div className="si-step-list" style={{ marginTop: '16px', maxHeight: '62vh', overflowY: 'auto' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOfferId('ALL')}
+                      className={`si-step-btn ${selectedOfferId === 'ALL' ? 'active' : ''}`}
+                    >
+                      <span className="si-step-num">All</span>
+                      <div>
+                        <div className="si-step-title">All Sent Offers</div>
+                        <div className="si-step-desc">Show all {jobOffers.length} candidates</div>
+                      </div>
+                    </button>
 
-                <div
-                  style={{
-                    marginTop: '18px',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                    gap: '16px',
-                    background: '#FFF7CC',
-                    padding: '18px',
-                    borderRadius: '12px'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      Who is scouting for workers
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
-                      {offer.recruiterName}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      Who they work for
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
-                      {offer.companyName}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      What job will they offer
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#29223B', marginTop: '4px' }}>
-                      {offer.jobTitle}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      Salary
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#166534', marginTop: '4px' }}>
-                      {offer.salary}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      Working Hours
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: '#29223B', marginTop: '4px' }}>
-                      {offer.workingHours}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B5997', textTransform: 'uppercase' }}>
-                      Employee Benefits
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: '#29223B', marginTop: '4px' }}>
-                      {offer.benefits || 'Not specified'}
-                    </div>
-                  </div>
-                </div>
+                    {jobOffers.map((offer, idx) => {
+                      const isSelected = selectedOfferId === offer.id;
+                      const hasNewReply =
+                        offer.messages?.length > 0 &&
+                        offer.messages[offer.messages.length - 1].senderRole === 'worker';
 
-                {/* Lengthened Neutral Offer Discussion & Messages Box */}
-                <div style={{ marginTop: '18px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
-                      Offer Discussion & Messages
-                    </span>
-                    {currentUser?.role === 'employer' &&
-                      offer.messages?.length > 0 &&
-                      offer.messages[offer.messages.length - 1].senderRole === 'worker' && (
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            background: '#F1F3F6',
-                            color: '#29223B',
-                            border: '1px solid #E2E5EC',
-                            padding: '3px 10px',
-                            borderRadius: '6px'
-                          }}
-                        >
-                          💬 New reply from {offer.workerName}
-                        </span>
-                      )}
-                  </div>
-
-                  <div
-                    ref={(el) => {
-                      offerChatRefs.current[offer.id] = el;
-                    }}
-                    className="si-chat-feed"
-                    style={{
-                      background: '#FAFBFD',
-                      border: '1px solid #ECEEF3',
-                      borderRadius: '12px',
-                      padding: '20px',
-                      marginBottom: '14px',
-                      minHeight: '360px',
-                      maxHeight: '500px',
-                      overflowY: 'auto',
-                      scrollBehavior: 'smooth'
-                    }}
-                  >
-                  
-                    {(offer.messages || []).map((m, idx) => {
-                      const isMe = m.senderRole === currentUser?.role;
                       return (
-                        <div key={idx} className={`si-chat-row ${isMe ? 'right' : 'left'}`}>
-                          <div className={`si-chat-bubble ${isMe ? 'outgoing' : 'incoming'}`}>
-                            {!isMe && (
-                              <div className="si-chat-sender">
-                                {m.senderName} ({m.senderRole === 'employer' ? 'Employer' : 'Applicant'})
-                              </div>
-                            )}
-                            <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                        <button
+                          key={offer.id}
+                          type="button"
+                          onClick={() => setSelectedOfferId(offer.id)}
+                          className={`si-step-btn ${isSelected ? 'active' : ''}`}
+                          style={{ height: 'auto', minHeight: '62px', padding: '10px 12px' }}
+                        >
+                          <span className="si-step-num">{idx + 1}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              className="si-step-title"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '6px'
+                              }}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {offer.workerName}
+                              </span>
+                              {hasNewReply && (
+                                <span
+                                  title="New worker reply"
+                                  style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    background: '#6951C8',
+                                    flexShrink: 0
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div
+                              className="si-step-desc"
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                              {offer.jobTitle} • {offer.status}
+                            </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
-
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                      type="text"
-                      className="si-input"
-                      style={{ height: '42px', fontSize: '13px' }}
-                      placeholder={
-                        currentUser?.role === 'employer'
-                          ? `Reply to ${offer.workerName}'s questions about schedule, pay, or requirements...`
-                          : 'Write a reply or question regarding this job offer...'
-                      }
-                      value={offerReplyInputs[offer.id] || ''}
-                      onChange={(e) =>
-                        setOfferReplyInputs((prev) => ({ ...prev, [offer.id]: e.target.value }))
-                      }
-                      onKeyDown={(e) => e.key === 'Enter' && handleOfferReplyOrStatus(offer.id)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleOfferReplyOrStatus(offer.id)}
-                      className="si-neutral-reply-btn"
-                    >
-                      {currentUser?.role === 'employer' ? 'Send Reply' : 'Reply'}
-                    </button>
-                  </div>
                 </div>
+              </aside>
+
+              {/* Right Column: Selected Candidate's Offer(s) */}
+              <div className="si-cards">
+                {(displayedOffers.length > 0 ? displayedOffers : jobOffers).map((offer) =>
+                  renderOfferCard(offer)
+                )}
               </div>
-            ))
+            </div>
+          ) : (
+            jobOffers.map((offer) => renderOfferCard(offer))
           )}
         </div>
         {renderFooter()}
