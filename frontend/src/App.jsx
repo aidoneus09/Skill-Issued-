@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import logoImg from './assets/LOGO2.png';
 
 const API_BASE =
@@ -191,6 +191,27 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const aiChatContainerRef = useRef(null);
+  const offerChatRefs = useRef({});
+
+  // Auto-scroll AI Career Coach chat to the newest message when opened or updated
+  useEffect(() => {
+    if (view === 'card' && aiChatContainerRef.current) {
+      aiChatContainerRef.current.scrollTop = aiChatContainerRef.current.scrollHeight;
+    }
+  }, [messages, loading, view]);
+
+  // Auto-scroll Offer Discussion chatboxes to the newest message when opened or updated
+  useEffect(() => {
+    if (view === 'offers') {
+      Object.values(offerChatRefs.current).forEach((el) => {
+        if (el) {
+          el.scrollTop = el.scrollHeight;
+        }
+      });
+    }
+  }, [jobOffers, view]);
+
   // Employer Filter & Structured Offer Modal State
   const [empSearch, setEmpSearch] = useState('');
   const [empCity, setEmpCity] = useState('');
@@ -305,21 +326,51 @@ export default function App() {
     }
   }, []);
 
-  // Fetch job offers ONLY for the currently logged-in user
+// Fetch & auto-refresh job offers in real time when viewing Offers
   useEffect(() => {
     if (!currentUser?.id) {
       setJobOffers([]);
       return;
     }
 
-    fetch(`${API_BASE}/api/offers?userId=${encodeURIComponent(currentUser.id)}`, {
-      headers: { 'x-user-id': currentUser.id }
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        if (Array.isArray(data)) setJobOffers(data);
+    const fetchOffers = () => {
+      fetch(`${API_BASE}/api/offers?userId=${encodeURIComponent(currentUser.id)}`, {
+        headers: { 'x-user-id': currentUser.id }
       })
-      .catch((err) => console.error('Could not load job offers:', err));
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setJobOffers((prev) =>
+              JSON.stringify(prev) !== JSON.stringify(data) ? data : prev
+            );
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchOffers();
+
+    const intervalMs = view === 'offers' ? 3000 : 10000;
+    const timer = setInterval(fetchOffers, intervalMs);
+    return () => clearInterval(timer);
+  }, [currentUser, view]);
+
+  // Fetch registered worker profiles ONLY when signed in as a verified employer
+  useEffect(() => {
+    if (currentUser?.role === 'employer' && currentUser?.verified) {
+      fetch(`${API_BASE}/api/workers?employerId=${encodeURIComponent(currentUser.id)}`, {
+        headers: { 'x-employer-id': currentUser.id }
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setSavedWorkers(data.filter((w) => Boolean(w.userId)));
+          }
+        })
+        .catch((err) => console.error('Could not load saved workers:', err));
+    } else {
+      setSavedWorkers([]);
+    }
   }, [currentUser]);
 
   // Fetch registered worker profiles ONLY when signed in as a verified employer
@@ -1749,7 +1800,7 @@ export default function App() {
                   }}
                 >
                   <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                    🍔 Sample Verified Employer (Jollibee Foods Corp)
+                    Sample Verified Employer (Jollibee Foods Corp)
                   </div>
                   <div>Email: <code>hr.manager@jollibee.com.ph</code></div>
                   <div>Password: <code>Jollibee2026!</code></div>
@@ -2538,7 +2589,11 @@ export default function App() {
                     ))}
                   </div>
 
-                  <div className="si-chat-feed" style={{ padding: '22px', height: '50vh', overflowY: 'auto', background: '#FAFBFD' }}>
+                  <div
+                    ref={aiChatContainerRef}
+                    className="si-chat-feed"
+                    style={{ padding: '22px', height: '50vh', overflowY: 'auto', background: '#FAFBFD', scrollBehavior: 'smooth' }}
+                  >
                     {messages.map((m, idx) => {
                       const isUser = m.role === 'user';
                       return (
@@ -2796,6 +2851,9 @@ export default function App() {
                   </div>
 
                   <div
+                    ref={(el) => {
+                      offerChatRefs.current[offer.id] = el;
+                    }}
                     className="si-chat-feed"
                     style={{
                       background: '#FAFBFD',
@@ -2805,9 +2863,11 @@ export default function App() {
                       marginBottom: '14px',
                       minHeight: '360px',
                       maxHeight: '500px',
-                      overflowY: 'auto'
+                      overflowY: 'auto',
+                      scrollBehavior: 'smooth'
                     }}
                   >
+                  
                     {(offer.messages || []).map((m, idx) => {
                       const isMe = m.senderRole === currentUser?.role;
                       return (

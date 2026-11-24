@@ -627,7 +627,7 @@ WORKER DIGITAL SKILL CARD:
 - Document Badges on Hand: ${(workerProfile?.badges || []).join(', ') || 'None yet'}
 
 AVAILABLE JOBS (jobs.csv):
-${JSON.stringify(jobsData.slice(0, 80))}
+${JSON.stringify(jobsData.slice(0, 100))}
 
 AVAILABLE COURSES & SKILLS (skills.csv):
 ${JSON.stringify(skillsData.slice(0, 100))}`;
