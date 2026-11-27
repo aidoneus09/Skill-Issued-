@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import logoImg from './assets/LOGO2.png';
+import logoImg from './assets/LOGO2.PNG';
 
 const API_BASE =
   import.meta.env.VITE_API_URL ||
