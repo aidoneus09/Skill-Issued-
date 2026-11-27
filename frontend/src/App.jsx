@@ -2743,13 +2743,13 @@ export default function App() {
     );
   }
 
-  // =========================================================================
-  // PART 3: JOB OFFERS TAB (WITH RECIPIENT SIDEBAR FOR EMPLOYERS)
+// =========================================================================
+  // PART 3: JOB OFFERS TAB (WITH SIDEBAR FOR BOTH EMPLOYERS & WORKERS)
   // =========================================================================
   if (view === 'offers') {
     const isEmployerOffersView = currentUser?.role === 'employer';
     const displayedOffers =
-      isEmployerOffersView && selectedOfferId !== 'ALL'
+      selectedOfferId !== 'ALL'
         ? jobOffers.filter((o) => o.id === selectedOfferId)
         : jobOffers;
 
@@ -2881,9 +2881,8 @@ export default function App() {
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
               Offer Discussion & Messages
             </span>
-            {currentUser?.role === 'employer' &&
-              offer.messages?.length > 0 &&
-              offer.messages[offer.messages.length - 1].senderRole === 'worker' && (
+            {offer.messages?.length > 0 &&
+              offer.messages[offer.messages.length - 1].senderRole !== currentUser?.role && (
                 <span
                   style={{
                     fontSize: '11px',
@@ -2895,7 +2894,7 @@ export default function App() {
                     borderRadius: '6px'
                   }}
                 >
-                  💬 New reply from {offer.workerName}
+                  💬 New message from {isEmployerOffersView ? offer.workerName : offer.companyName}
                 </span>
               )}
           </div>
@@ -2940,7 +2939,7 @@ export default function App() {
               className="si-input"
               style={{ height: '42px', fontSize: '13px' }}
               placeholder={
-                currentUser?.role === 'employer'
+                isEmployerOffersView
                   ? `Reply to ${offer.workerName}'s questions about schedule, pay, or requirements...`
                   : 'Write a reply or question regarding this job offer...'
               }
@@ -2955,7 +2954,7 @@ export default function App() {
               onClick={() => handleOfferReplyOrStatus(offer.id)}
               className="si-neutral-reply-btn"
             >
-              {currentUser?.role === 'employer' ? 'Send Reply' : 'Reply'}
+              {isEmployerOffersView ? 'Send Reply' : 'Reply'}
             </button>
           </div>
         </div>
@@ -3029,15 +3028,24 @@ export default function App() {
                 </button>
               )}
             </div>
-          ) : isEmployerOffersView ? (
+          ) : (
             <div className="si-main" style={{ margin: 0, padding: 0 }}>
-              {/* Left Sidebar Listing All Users Sent Job Offers */}
+              {/* Left Sidebar Listing All Candidates (Employer) or All Job Offers (Worker) */}
               <aside className="si-sidebar">
                 <div className="si-guide-card" style={{ padding: '20px 16px' }}>
                   <div className="si-guide-header">
-                    <div className="si-guide-title">Candidates Offered</div>
+                    <div className="si-guide-title">
+                      {isEmployerOffersView ? 'Candidates Offered' : 'Job Offers'}
+                    </div>
                     <div className="si-guide-sub">
-                      {jobOffers.length} {jobOffers.length === 1 ? 'offer sent' : 'offers sent'}
+                      {jobOffers.length}{' '}
+                      {isEmployerOffersView
+                        ? jobOffers.length === 1
+                          ? 'offer sent'
+                          : 'offers sent'
+                        : jobOffers.length === 1
+                        ? 'offer received'
+                        : 'offers received'}
                     </div>
                   </div>
 
@@ -3049,16 +3057,20 @@ export default function App() {
                     >
                       <span className="si-step-num">All</span>
                       <div>
-                        <div className="si-step-title">All Sent Offers</div>
-                        <div className="si-step-desc">Show all {jobOffers.length} candidates</div>
+                        <div className="si-step-title">
+                          {isEmployerOffersView ? 'All Sent Offers' : 'All Job Offers'}
+                        </div>
+                        <div className="si-step-desc">
+                          Show all {jobOffers.length} {isEmployerOffersView ? 'candidates' : 'offers'}
+                        </div>
                       </div>
                     </button>
 
                     {jobOffers.map((offer, idx) => {
                       const isSelected = selectedOfferId === offer.id;
-                      const hasNewReply =
+                      const hasUnreadMessage =
                         offer.messages?.length > 0 &&
-                        offer.messages[offer.messages.length - 1].senderRole === 'worker';
+                        offer.messages[offer.messages.length - 1].senderRole !== currentUser?.role;
 
                       return (
                         <button
@@ -3080,11 +3092,11 @@ export default function App() {
                               }}
                             >
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {offer.workerName}
+                                {isEmployerOffersView ? offer.workerName : offer.companyName}
                               </span>
-                              {hasNewReply && (
+                              {hasUnreadMessage && (
                                 <span
-                                  title="New worker reply"
+                                  title="New message"
                                   style={{
                                     width: '8px',
                                     height: '8px',
@@ -3109,15 +3121,13 @@ export default function App() {
                 </div>
               </aside>
 
-              {/* Right Column: Selected Candidate's Offer(s) */}
+              {/* Right Column: Selected Offer(s) */}
               <div className="si-cards">
                 {(displayedOffers.length > 0 ? displayedOffers : jobOffers).map((offer) =>
                   renderOfferCard(offer)
                 )}
               </div>
             </div>
-          ) : (
-            jobOffers.map((offer) => renderOfferCard(offer))
           )}
         </div>
         {renderFooter()}
@@ -3125,6 +3135,7 @@ export default function App() {
     );
   }
 
+  
   // =========================================================================
   // PART 4: CAREER RESOURCES TAB
   // =========================================================================
